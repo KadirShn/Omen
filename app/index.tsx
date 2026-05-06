@@ -38,7 +38,7 @@ export default function IndexScreen() {
     loadQuota();
   }, []);
 
-  // ✍️ Yazma Efekti (Typewriter) - Harf Yutmayan Slice Versiyonu test test
+  // ✍️ Yazma Efekti (Typewriter) - Harf Yutmayan Slice Versiyonu
   useEffect(() => {
     if (result?.yorum) {
       let index = 0;
