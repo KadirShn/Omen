@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,8 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { MysticLoader } from '../components/MysticLoader';
-import { getRemainingRequests, incrementRequestCount } from '../utils/storage';
+import { MysticLoader } from "../components/MysticLoader";
+import { getRemainingRequests, incrementRequestCount } from "../utils/storage";
 
 // 🚨 API Anahtarı artık .env dosyasından çekiliyor. (EXPO_PUBLIC_GEMINI_API_KEY)
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || "";
@@ -26,7 +26,9 @@ export default function IndexScreen() {
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [typedText, setTypedText] = useState("");
-  const [remainingRequests, setRemainingRequests] = useState<number | null>(null);
+  const [remainingRequests, setRemainingRequests] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadQuota = async () => {
@@ -36,7 +38,7 @@ export default function IndexScreen() {
     loadQuota();
   }, []);
 
-  // ✍️ Yazma Efekti (Typewriter) - Harf Yutmayan Slice Versiyonu
+  // ✍️ Yazma Efekti (Typewriter) - Harf Yutmayan Slice Versiyonu test test
   useEffect(() => {
     if (result?.yorum) {
       let index = 0;
@@ -59,8 +61,8 @@ export default function IndexScreen() {
   const analyzeDream = async () => {
     if (remainingRequests !== null && remainingRequests <= 0) {
       Alert.alert(
-        "🔮 Sınır Aşıldı", 
-        "Bugünlük ruhsal enerjin tükendi. Yarın tekrar gel mistik yolcu..."
+        "🔮 Sınır Aşıldı",
+        "Bugünlük ruhsal enerjin tükendi. Yarın tekrar gel mistik yolcu...",
       );
       return;
     }
@@ -122,7 +124,7 @@ export default function IndexScreen() {
 
         const jsonResponse = JSON.parse(cleanJson);
         setResult(jsonResponse);
-        
+
         // Kotayı 1 düşür ve UI'a yansıt
         const newRemaining = await incrementRequestCount();
         setRemainingRequests(newRemaining);
@@ -131,7 +133,8 @@ export default function IndexScreen() {
       }
     } catch (error) {
       console.error("ANALİZ HATASI:", error);
-      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen bir hata.";
+      const errorMessage =
+        error instanceof Error ? error.message : "Bilinmeyen bir hata.";
       Alert.alert("Hata Detayı", errorMessage);
     } finally {
       // 2. DÜZELTME: Animasyonun yarım kalmaması için en az 2 saniye bekle
@@ -139,7 +142,9 @@ export default function IndexScreen() {
       const minWait = 2500; // 2.5 saniye mistik bir bekleme
 
       if (elapsedTime < minWait) {
-        await new Promise(resolve => setTimeout(resolve, minWait - elapsedTime));
+        await new Promise((resolve) =>
+          setTimeout(resolve, minWait - elapsedTime),
+        );
       }
 
       setIsLoading(false);
@@ -181,10 +186,17 @@ export default function IndexScreen() {
           <TouchableOpacity
             style={[
               styles.button,
-              (!dream.trim() || isLoading || (remainingRequests !== null && remainingRequests <= 0)) && styles.buttonDisabled,
+              (!dream.trim() ||
+                isLoading ||
+                (remainingRequests !== null && remainingRequests <= 0)) &&
+                styles.buttonDisabled,
             ]}
             onPress={analyzeDream}
-            disabled={!dream.trim() || isLoading || (remainingRequests !== null && remainingRequests <= 0)}
+            disabled={
+              !dream.trim() ||
+              isLoading ||
+              (remainingRequests !== null && remainingRequests <= 0)
+            }
           >
             {isLoading ? (
               // Düzeltme: Bekleme sırasında dönen yükleme simgesi (Rengi Mor yapıldı ki görünsün!)
