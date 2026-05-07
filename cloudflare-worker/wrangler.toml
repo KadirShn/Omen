@@ -1,0 +1,8 @@
+name = "omen-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-05-07"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# API anahtarları buraya DEĞİL, Cloudflare dashboard üzerinden Secret olarak eklenecek!
+# Kural 1'i ihlal etmemek adına gizli tutulacak.
