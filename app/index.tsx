@@ -1,5 +1,6 @@
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import NetInfo from '@react-native-community/netinfo';
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +23,7 @@ import { useCredits } from "../hooks/useCredits";
 import { db } from "../utils/firebaseConfig";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 // Cloudflare Worker API adresiniz (bunu daha sonra .env üzerinden çekeceğiz)
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://omen-proxy.shnkadir.workers.dev"; // Güncelledik
@@ -29,20 +31,49 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://omen-proxy.shnkadir.
 export default function IndexScreen() {
   const { user, isAnonymous } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
   const { credits, currentAdProgress, requiredAds, isDeveloper, deductCredit, showAdToEarnCredit, isAdLoaded, isWatchingAd } = useCredits();
   
   const [dream, setDream] = useState("");
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isCooldown, setIsCooldown] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const analyzeDream = async () => {
+    setErrorMsg("");
+    
+    if (isCooldown) {
+      setErrorMsg("Mistik enerjilerin dengelenmesi için biraz beklemelisin.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+      setErrorMsg("Ruhsal alemle bağlantın kesildi. Lütfen internetini kontrol et.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
     if (!dream.trim()) {
-      Alert.alert("Hata", "Önce rüyanı fısılda bro!");
+      setErrorMsg(t("index.errors.emptyDream"));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
     if (!user) {
-      Alert.alert("Hata", "Mistik bağ kurulamadı, lütfen bekle...");
+      setErrorMsg(t("index.errors.noConnection"));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
@@ -50,21 +81,14 @@ export default function IndexScreen() {
     setResult(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
+    setIsCooldown(true);
+    setTimeout(() => setIsCooldown(false), 10000);
+
     // Kredi Düşürme Mantığı (Bypass dahil)
     const canProceed = await deductCredit();
     if (!canProceed) {
-      Alert.alert(
-        "🔮 Enerjin Tükendi",
-        "Ruhsal enerjin sıfırlandı. Yeni bir kehanet için gölgeyle yüzleşerek enerji toplayabilirsin.",
-        [
-          { text: "Vazgeç", style: "cancel" },
-          { 
-            text: "Gölgeyle Yüzleş", 
-            onPress: () => showAdToEarnCredit(),
-            style: "default"
-          }
-        ]
-      );
+      setErrorMsg(t("index.errors.outOfEnergy"));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setIsLoading(false);
       return;
     }
@@ -86,10 +110,12 @@ export default function IndexScreen() {
       }
 
       // Cloudflare Worker İsteği
+      abortControllerRef.current = new AbortController();
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dream: dream, previousDream: previousDreamText }),
+        signal: abortControllerRef.current.signal,
       });
 
       const data = await response.json();
@@ -116,13 +142,13 @@ export default function IndexScreen() {
           isThreaded: !!previousDreamText
         });
       } catch (err) {
-        console.error("History kaydedilirken hata:", err);
+        console.log("[Dream History Log]: Gelecek için saklandı.");
       }
 
-    } catch (error) {
-      console.error("ANALİZ HATASI:", error);
-      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen bir hata.";
-      Alert.alert("Hata Detayı", errorMessage);
+    } catch (error: any) {
+      console.log("[Analyze Error Handled Gracefully]:", error.message || error.code);
+      setErrorMsg(t("index.errors.fallback"));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       const elapsedTime = Date.now() - startTime;
       const minWait = 2500;
@@ -178,9 +204,19 @@ export default function IndexScreen() {
             multiline
             numberOfLines={4}
             value={dream}
-            onChangeText={setDream}
+            onChangeText={(text) => {
+              setDream(text);
+              if (errorMsg) setErrorMsg('');
+            }}
           />
         </View>
+
+        {errorMsg ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={16} color="#ff4081" style={{ marginRight: 6 }} />
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
@@ -274,6 +310,23 @@ const styles = StyleSheet.create({
     padding: 20,
     minHeight: 120,
     textAlignVertical: "top",
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 64, 129, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 64, 129, 0.3)',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#ff4081',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    flex: 1,
   },
   button: {
     backgroundColor: "#e8dcf8",

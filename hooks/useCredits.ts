@@ -67,7 +67,7 @@ export const useCredits = () => {
               });
               console.log("Granted daily +1 energy and reset fatigue!");
             } catch (e) {
-              console.error("Failed to grant daily reward/reset:", e);
+              console.log("[useCredits]: Failed to grant daily reward/reset", e);
             }
           } else {
             // User reached cap. Reset fatigue but do not add credit.
@@ -79,7 +79,7 @@ export const useCredits = () => {
               });
               console.log("Cap reached. Reset fatigue but no credits added.");
             } catch (e) {
-              console.error("Failed to reset fatigue:", e);
+              console.log("[useCredits]: Failed to reset fatigue", e);
             }
           }
         }
@@ -132,7 +132,7 @@ export const useCredits = () => {
       }
       return false;
     } catch (error) {
-      console.error("Failed to deduct credit:", error);
+      console.log("[useCredits]: Failed to deduct credit", error);
       return false;
     }
   }, [credits, isDeveloper, user]);

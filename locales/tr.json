@@ -1,0 +1,31 @@
+{
+  "auth": {
+    "title": "OMEN",
+    "subtitleLogin": "Rüya alemine geri dön.",
+    "subtitleSignup": "Kayıt ol, günlük enerjini al ve rüya geçmişini sonsuza dek sakla.",
+    "emailPlaceholder": "E-posta",
+    "passwordPlaceholder": "Şifre",
+    "loginBtn": "Giriş Yap",
+    "signupLinkBtn": "Kayıt Ol & Bağla",
+    "switchSignup": "Hesabın yok mu? Kayıt Ol",
+    "switchLogin": "Zaten hesabın var mı? Giriş Yap",
+    "missingInfo": "Lütfen tüm alanları doldur.",
+    "successSignup": "Hesabın kalıcı hale getirildi ve rüya geçmişin korundu!",
+    "errors": {
+      "invalid-email": "Geçersiz e-posta formatı.",
+      "invalid-credential": "E-posta veya şifre hatalı.",
+      "email-already-in-use": "Bu e-posta zaten kullanımda.",
+      "weak-password": "Şifre çok zayıf (en az 6 karakter).",
+      "network-request-failed": "Bağlantı hatası. Ağa erişilemiyor.",
+      "fallback": "Mistik ağda bir dalgalanma oldu."
+    }
+  },
+  "index": {
+    "errors": {
+      "emptyDream": "Önce rüyanı fısılda bro!",
+      "noConnection": "Mistik bağ kurulamadı, lütfen bekle...",
+      "outOfEnergy": "Ruhsal enerjin sıfırlandı. Gölgeyle yüzleşerek enerji toplayabilirsin.",
+      "fallback": "Mistik ağda bir dalgalanma oldu. Lütfen tekrar dene."
+    }
+  }
+}

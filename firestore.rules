@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. KULLANICI PROFİLİ VE EKONOMİ KİLİDİ
+    match /users/{userId} {
+      // Sadece profil sahibi okuyabilir ve dökümanı ilk kez oluşturabilir
+      allow read, create: if request.auth != null && request.auth.uid == userId;
+      
+      // Kredi suistimalini önleme: Kullanıcı kredilerini kafasına göre +1000 artıramaz.
+      // Sadece 1'er 1'er harcamasına (azalmasına) veya sistemin günlük +1 vermesine izin veririz.
+      allow update: if request.auth != null && request.auth.uid == userId 
+                    && (request.resource.data.credits <= resource.data.credits + 1);
+    }
+
+    // 2. RÜYA GEÇMİŞİ VERİ GİZLİLİĞİ (Data Privacy)
+    match /dream_history/{docId} {
+      // Kullanıcı sadece kendi UID'si ile eşleşen rüyaları okuyabilir, yazabilir ve silebilir.
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+  }
+}

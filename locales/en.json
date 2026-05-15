@@ -1,0 +1,31 @@
+{
+  "auth": {
+    "title": "OMEN",
+    "subtitleLogin": "Return to the dream realm.",
+    "subtitleSignup": "Sign up, claim daily energy, and preserve your dream history eternally.",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "loginBtn": "Log In",
+    "signupLinkBtn": "Sign Up & Link",
+    "switchSignup": "No account? Sign Up",
+    "switchLogin": "Already have an account? Log In",
+    "missingInfo": "Please fill in all fields.",
+    "successSignup": "Account permanently secured and dream history preserved!",
+    "errors": {
+      "invalid-email": "Invalid email format.",
+      "invalid-credential": "Incorrect email or password.",
+      "email-already-in-use": "This email is already in use.",
+      "weak-password": "Password is too weak (min 6 characters).",
+      "network-request-failed": "Network error. Cannot reach the realm.",
+      "fallback": "A disturbance in the mystic network."
+    }
+  },
+  "index": {
+    "errors": {
+      "emptyDream": "Whisper your dream first, bro!",
+      "noConnection": "Mystic bond could not be established, please wait...",
+      "outOfEnergy": "Your soul energy is depleted. Face the shadow to gather more.",
+      "fallback": "A disturbance in the mystic network. Please try again."
+    }
+  }
+}

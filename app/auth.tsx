@@ -24,26 +24,50 @@ import {
 } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
-
-const { width, height } = Dimensions.get('window');
+import { useTranslation } from 'react-i18next';
 
 export default function AuthScreen() {
   const { user, isAnonymous } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [isLoginMode, setIsLoginMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const toggleMode = () => {
     Haptics.selectionAsync();
     setIsLoginMode((prev) => !prev);
+    setErrorMsg('');
+  };
+
+  const getErrorMessage = (errorCode: string) => {
+    switch (errorCode) {
+      case 'auth/invalid-email':
+        return t('auth.errors.invalid-email');
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential':
+        return t('auth.errors.invalid-credential');
+      case 'auth/email-already-in-use':
+        return t('auth.errors.email-already-in-use');
+      case 'auth/weak-password':
+        return t('auth.errors.weak-password');
+      case 'auth/network-request-failed':
+        return t('auth.errors.network-request-failed');
+      default:
+        return t('auth.errors.fallback');
+    }
   };
 
   const handleAuthentication = async () => {
+    setErrorMsg('');
+
     if (!email || !password) {
-      Alert.alert('Eksik Bilgi', 'Lütfen tüm alanları doldur.');
+      setErrorMsg(t('auth.missingInfo'));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
@@ -52,24 +76,26 @@ export default function AuthScreen() {
 
     try {
       if (isLoginMode) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email.trim(), password);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace('/');
       } else {
         if (isAnonymous && user) {
-          const credential = EmailAuthProvider.credential(email, password);
+          const credential = EmailAuthProvider.credential(email.trim(), password);
           await linkWithCredential(user, credential);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Başarılı', 'Hesabın kalıcı hale getirildi ve rüya geçmişin korundu!');
+          // Alert removed for pure cinematic flow; user is seamlessly routed.
         } else {
-          await createUserWithEmailAndPassword(auth, email, password);
+          await createUserWithEmailAndPassword(auth, email.trim(), password);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         router.replace('/');
       }
     } catch (error: any) {
-      console.error(error);
-      Alert.alert('Hata', error.message || 'Bir sorun oluştu.');
+      // Swallowing console.error to prevent Expo LogBox from showing raw bottom toasts.
+      console.log('[Auth Error Handled Gracefully]:', error.code);
+      const translatedError = getErrorMessage(error.code);
+      setErrorMsg(translatedError);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
@@ -80,13 +106,11 @@ export default function AuthScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {/* Cinematic Deep Violet to Pure Black Gradient */}
       <LinearGradient
         colors={['#1a0b2e', '#0d0417', '#000000']}
         style={StyleSheet.absoluteFill}
       />
       
-      {/* Subtle Mist/Glow Overlay */}
       <LinearGradient
         colors={['rgba(192, 132, 252, 0.1)', 'transparent']}
         style={styles.mistOverlay}
@@ -94,7 +118,6 @@ export default function AuthScreen() {
         end={{ x: 0.5, y: 1 }}
       />
 
-      {/* Integrated Back Navigation */}
       <TouchableOpacity 
         style={styles.backButton} 
         onPress={() => router.back()}
@@ -108,34 +131,45 @@ export default function AuthScreen() {
         style={styles.content}
       >
         <View style={styles.headerContainer}>
-          <Text style={styles.title}>OMEN</Text>
+          <Text style={styles.title}>{t('auth.title')}</Text>
           <View style={styles.glowUnderline} />
           <Text style={styles.subtitle}>
-            {isLoginMode
-              ? 'Rüya alemine geri dön.'
-              : 'Kayıt ol, günlük enerjini al ve rüya geçmişini sonsuza dek sakla.'}
+            {isLoginMode ? t('auth.subtitleLogin') : t('auth.subtitleSignup')}
           </Text>
         </View>
 
         <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
-            placeholder="E-posta"
+            placeholder={t('auth.emailPlaceholder')}
             placeholderTextColor="rgba(192, 132, 252, 0.4)"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (errorMsg) setErrorMsg('');
+            }}
           />
 
           <TextInput
             style={styles.input}
-            placeholder="Şifre"
+            placeholder={t('auth.passwordPlaceholder')}
             placeholderTextColor="rgba(192, 132, 252, 0.4)"
             secureTextEntry
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (errorMsg) setErrorMsg('');
+            }}
           />
+
+          {errorMsg ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={16} color="#ff4081" style={{ marginRight: 6 }} />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={styles.primaryButton}
@@ -153,7 +187,7 @@ export default function AuthScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.buttonText}>
-                  {isLoginMode ? 'Giriş Yap' : 'Kayıt Ol & Bağla'}
+                  {isLoginMode ? t('auth.loginBtn') : t('auth.signupLinkBtn')}
                 </Text>
               )}
             </LinearGradient>
@@ -161,9 +195,7 @@ export default function AuthScreen() {
 
           <TouchableOpacity style={styles.switchModeButton} onPress={toggleMode}>
             <Text style={styles.switchModeText}>
-              {isLoginMode
-                ? 'Hesabın yok mu? Kayıt Ol'
-                : 'Zaten hesabın var mı? Giriş Yap'}
+              {isLoginMode ? t('auth.switchSignup') : t('auth.switchLogin')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -244,16 +276,32 @@ const styles = StyleSheet.create({
     padding: 18,
     color: '#fff',
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#c084fc',
     shadowOpacity: 0.1,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 0 },
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 64, 129, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 64, 129, 0.3)',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#ff4081',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
   primaryButton: {
     borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 15,
+    marginTop: 5,
     elevation: 10,
     shadowColor: '#c084fc',
     shadowOpacity: 0.6,
