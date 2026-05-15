@@ -1,18 +1,27 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { auth, db } from "../utils/firebaseConfig";
-import { signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
+import { 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  User, 
+  signOut
+} from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 interface AuthContextData {
   user: User | null;
   loading: boolean;
   isDeveloper: boolean;
+  isAnonymous: boolean;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData>({
   user: null,
   loading: true,
   isDeveloper: false,
+  isAnonymous: true,
+  logout: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -21,38 +30,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isDeveloper, setIsDeveloper] = useState(false);
 
   useEffect(() => {
-    // Firebase auth'u dinle
+    // Listen to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
         
         try {
-          // Firestore'dan kullanıcı verisini kontrol et
+          // Check or create user document in Firestore
           const userRef = doc(db, "users", firebaseUser.uid);
           const userDoc = await getDoc(userRef);
           
           if (!userDoc.exists()) {
-            // Kullanıcı ilk defa giriyorsa Firestore'a kaydet
+            // Guest gets 2 welcome credits, Permanent user gets 5
+            const initialCredits = firebaseUser.isAnonymous ? 2 : 5;
             await setDoc(userRef, {
               createdAt: new Date().toISOString(),
-              requestsToday: 0,
-              lastRequestDate: new Date().toISOString().split('T')[0],
-              isDeveloper: false, // Default olarak developer değil
+              credits: initialCredits,
+              isDeveloper: false,
             });
             setIsDeveloper(false);
           } else {
-            // isDeveloper bayrağını al (Kural 4)
             setIsDeveloper(userDoc.data().isDeveloper || false);
           }
         } catch (error) {
-          console.error("Firestore okuma/yazma hatası (Kurulum bitmemiş olabilir):", error);
+          console.error("Firestore read/write error:", error);
         }
       } else {
         setUser(null);
-        // Kullanıcı giriş yapmamışsa otomatik Anonim giriş yap
-        signInAnonymously(auth).catch((error) => {
-          console.error("Anonim giriş hatası:", error);
-        });
+        // Automatic Guest Mode
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Anonymous login failed:", error);
+        }
       }
       setLoading(false);
     });
@@ -60,8 +70,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      // It will automatically trigger onAuthStateChanged and log in anonymously
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, isDeveloper }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        loading, 
+        isDeveloper, 
+        isAnonymous: user?.isAnonymous ?? true,
+        logout
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

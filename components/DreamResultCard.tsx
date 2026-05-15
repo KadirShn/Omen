@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Dimensions, Image, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { View, Text, ScrollView, StyleSheet, Dimensions, Image, ActivityIndicator, Animated } from "react-native";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface DreamResultCardProps {
   result: {
-    yorum: string;
-    mood: string;
-    renk: string;
-    semboller: string[];
+    interpretation: string;
+    primaryEmotion: string;
+    moodScore: number;
+    archetypes: string[];
     gorsel_betimleme: string;
     gorsel_url?: string;
   };
@@ -17,13 +17,15 @@ interface DreamResultCardProps {
 export function DreamResultCard({ result }: DreamResultCardProps) {
   const [typedText, setTypedText] = useState("");
   const [isImageLoading, setIsImageLoading] = useState(true);
+  
+  // Fade in animation for the whole card
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Typewriter effect
   useEffect(() => {
-    if (result?.yorum) {
+    if (result?.interpretation) {
       let index = 0;
       setTypedText("");
-      const textToType = result.yorum;
+      const textToType = result.interpretation;
 
       const interval = setInterval(() => {
         setTypedText(textToType.slice(0, index + 1));
@@ -31,25 +33,66 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
         if (index >= textToType.length) {
           clearInterval(interval);
         }
-      }, 30);
+      }, 25); // Slightly faster typing
+
+      // Trigger fade in
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
 
       return () => clearInterval(interval);
     }
-  }, [result]);
+  }, [result, fadeAnim]);
+
+  // Safely compute mood score percentage (max 100%)
+  const scorePercentage = Math.min(Math.max((result.moodScore / 10) * 100, 0), 100);
+
+  // Gradient-like color based on score
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "#00e676"; // Positive green
+    if (score >= 5) return "#ffea00"; // Neutral yellow
+    return "#ff1744"; // Negative red
+  };
 
   return (
-    <View style={styles.resultCard}>
-      {/* Symbol Tags */}
-      <View style={styles.tagRow}>
-        {result.semboller.map((s, i) => (
-          <View key={i} style={styles.tag}>
-            <Text style={styles.tagText}>#{s.toUpperCase()}</Text>
+    <Animated.View style={[styles.resultCard, { opacity: fadeAnim }]}>
+      
+      {/* 1. Jungian Archetypes Tags */}
+      {result.archetypes && result.archetypes.length > 0 && (
+        <View style={styles.tagRow}>
+          {result.archetypes.map((archetype, i) => (
+            <View key={i} style={styles.tag}>
+              <Text style={styles.tagText}>✨ {archetype.toUpperCase()}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* 2. Primary Emotion & Mood Score (Premium UI) */}
+      <View style={styles.statsContainer}>
+        <View style={styles.emotionBox}>
+          <Text style={styles.statLabel}>BASKIN DUYGU</Text>
+          <Text style={styles.emotionText}>{result.primaryEmotion}</Text>
+        </View>
+        <View style={styles.scoreBox}>
+          <Text style={styles.statLabel}>RUH HALİ ({result.moodScore}/10)</Text>
+          <View style={styles.progressBarBg}>
+            <View 
+              style={[
+                styles.progressBarFill, 
+                { width: `${scorePercentage}%`, backgroundColor: getScoreColor(result.moodScore) }
+              ]} 
+            />
           </View>
-        ))}
+        </View>
       </View>
 
-      <Text style={styles.resultHeader}>RUHUNUN SESİ DİYOR Kİ:</Text>
+      <View style={styles.divider} />
 
+      {/* 3. The Interpretation (Typewriter effect) */}
+      <Text style={styles.resultHeader}>RUHUNUN SESİ DİYOR Kİ:</Text>
       <View style={styles.interpretationScrollContainer}>
         <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
           <Text style={styles.resultText}>{typedText}</Text>
@@ -58,14 +101,13 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
 
       <View style={styles.divider} />
 
-      <Text style={styles.aiArtHeader}>🖼️ Rüya Vizyonu Betimlemesi:</Text>
-      <Text style={styles.aiArtText}>{result.gorsel_betimleme}</Text>
-
+      {/* 4. Cinematic Dream Vision (Image) */}
+      <Text style={styles.aiArtHeader}>🖼️ Rüya Vizyonu:</Text>
       {result.gorsel_url && (
         <View style={styles.imageContainer}>
           {isImageLoading && (
             <View style={styles.imageLoaderContainer}>
-              <ActivityIndicator color="#6c2e9c" size="large" />
+              <ActivityIndicator color="#03dac6" size="large" />
               <Text style={styles.loadingText}>Rüya vizyonu şekilleniyor...</Text>
             </View>
           )}
@@ -77,72 +119,116 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
           />
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   resultCard: {
-    marginTop: 30,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    marginTop: 20,
+    backgroundColor: "rgba(18, 10, 31, 0.7)", // Deep mystic dark
     padding: 25,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(108, 46, 156, 0.5)", // Glowing purple border
+    shadowColor: "#6c2e9c",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 10,
+    marginBottom: 40,
   },
-  tagRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 20 },
   tag: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: "rgba(108, 46, 156, 0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
+    marginRight: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(108, 46, 156, 0.6)",
   },
-  tagText: { color: "#03dac6", fontSize: 11, fontWeight: "bold" },
+  tagText: { color: "#e8dcf8", fontSize: 11, fontWeight: "bold", letterSpacing: 1 },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  emotionBox: {
+    flex: 1,
+    marginRight: 15,
+  },
+  scoreBox: {
+    flex: 1,
+  },
+  statLabel: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 10,
+    fontWeight: "bold",
+    marginBottom: 6,
+    letterSpacing: 1,
+  },
+  emotionText: {
+    color: "#03dac6", // Cyber neon cyan
+    fontSize: 18,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  progressBarBg: {
+    height: 8,
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(108, 46, 156, 0.3)",
+    marginVertical: 20,
+  },
   resultHeader: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(232, 220, 248, 0.7)",
     fontSize: 12,
     fontWeight: "900",
     marginBottom: 10,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   interpretationScrollContainer: {
-    maxHeight: SCREEN_HEIGHT * 0.15,
+    maxHeight: SCREEN_HEIGHT * 0.2,
     marginBottom: 10,
   },
   resultText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 17,
     lineHeight: 28,
-    fontWeight: "500",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    marginVertical: 20,
+    fontWeight: "400",
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   aiArtHeader: {
-    color: "rgba(255,255,255,0.5)",
+    color: "rgba(232, 220, 248, 0.7)",
     fontSize: 13,
     fontWeight: "bold",
-    marginBottom: 5,
-  },
-  aiArtText: {
-    color: "#aaa",
-    fontSize: 13,
-    fontStyle: "italic",
-    lineHeight: 20,
     marginBottom: 15,
+    letterSpacing: 1,
   },
   imageContainer: {
     width: "100%",
-    height: 200,
-    borderRadius: 15,
+    height: 250,
+    borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(0,0,0,0.3)", // Yüklenirken arkası koyu dursun
+    borderColor: "rgba(108, 46, 156, 0.4)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -155,13 +241,13 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "rgba(255,255,255,0.6)",
     fontSize: 12,
-    marginTop: 10,
+    marginTop: 12,
     fontStyle: "italic",
   },
   dreamImage: {
     width: "100%",
     height: "100%",
-    position: "absolute", // Yüklenirken spinnner'ı ezmesin
+    position: "absolute",
     zIndex: 2,
   },
 });

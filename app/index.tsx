@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,32 +13,27 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { collection, query, where, orderBy, limit, getDocs, addDoc } from "firebase/firestore";
 import { DreamResultCard } from "../components/DreamResultCard";
+import { EnergyBar } from "../components/EnergyBar";
 import { MysticLoader } from "../components/MysticLoader";
 import { useAuth } from "../context/AuthContext";
-import { checkAndIncrementQuota, getRemainingQuota } from "../utils/quota";
+import { useCredits } from "../hooks/useCredits";
+import { db } from "../utils/firebaseConfig";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 // Cloudflare Worker API adresiniz (bunu daha sonra .env üzerinden çekeceğiz)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8787";
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://omen-proxy.shnkadir.workers.dev"; // Güncelledik
 
 export default function IndexScreen() {
-  const { user, isDeveloper } = useAuth();
+  const { user, isAnonymous } = useAuth();
+  const router = useRouter();
+  const { credits, currentAdProgress, requiredAds, isDeveloper, deductCredit, showAdToEarnCredit, isAdLoaded, isWatchingAd } = useCredits();
+  
   const [dream, setDream] = useState("");
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [remainingRequests, setRemainingRequests] = useState<number | null>(
-    null,
-  );
-
-  useEffect(() => {
-    const loadQuota = async () => {
-      if (user) {
-        const remaining = await getRemainingQuota(user.uid, isDeveloper);
-        setRemainingRequests(remaining);
-      }
-    };
-    loadQuota();
-  }, [user, isDeveloper]);
 
   const analyzeDream = async () => {
     if (!dream.trim()) {
@@ -53,34 +48,48 @@ export default function IndexScreen() {
 
     setIsLoading(true);
     setResult(null);
-
-    // Haptik Geribildirim (Daha premium hissettirir)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Kotayı Firestore üzerinden kontrol et ve düş
-    const canProceed = await checkAndIncrementQuota(user.uid, isDeveloper);
+    // Kredi Düşürme Mantığı (Bypass dahil)
+    const canProceed = await deductCredit();
     if (!canProceed) {
       Alert.alert(
-        "🔮 Sınır Aşıldı",
-        "Bugünlük ruhsal enerjin tükendi. Yarın tekrar gel mistik yolcu...",
+        "🔮 Enerjin Tükendi",
+        "Ruhsal enerjin sıfırlandı. Yeni bir kehanet için gölgeyle yüzleşerek enerji toplayabilirsin.",
+        [
+          { text: "Vazgeç", style: "cancel" },
+          { 
+            text: "Gölgeyle Yüzleş", 
+            onPress: () => showAdToEarnCredit(),
+            style: "default"
+          }
+        ]
       );
       setIsLoading(false);
       return;
     }
 
-    // Kota düştükten sonra UI'ı güncelle
-    const newRemaining = await getRemainingQuota(user.uid, isDeveloper);
-    setRemainingRequests(newRemaining);
-
-    // Minimum görünürlük süresi (Animasyonun tadını çıkarmak için)
     const startTime = Date.now();
 
     try {
-      // İstek direkt olarak bizim Cloudflare Worker'ımıza atılıyor (Kural 1 Güvenliği)
+      // Önceki Rüyayı Çekme (Dream Threading)
+      let previousDreamText = "";
+      try {
+        const historyRef = collection(db, "dream_history");
+        const q = query(historyRef, where("uid", "==", user.uid), orderBy("createdAt", "desc"), limit(1));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          previousDreamText = querySnapshot.docs[0].data().dreamInputText;
+        }
+      } catch (err) {
+        console.error("Geçmiş rüya çekilirken hata:", err);
+      }
+
+      // Cloudflare Worker İsteği
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dream: dream }),
+        body: JSON.stringify({ dream: dream, previousDream: previousDreamText }),
       });
 
       const data = await response.json();
@@ -90,21 +99,36 @@ export default function IndexScreen() {
       }
 
       setResult(data);
+
+      // Sonucu History Koleksiyonuna Kaydetme
+      try {
+        await addDoc(collection(db, "dream_history"), {
+          uid: user.uid,
+          createdAt: new Date().toISOString(),
+          dreamInputText: dream,
+          aiAnalysis: {
+            interpretation: data.interpretation,
+            primaryEmotion: data.primaryEmotion,
+            moodScore: data.moodScore,
+            archetypes: data.archetypes,
+          },
+          imageUrl: data.gorsel_url,
+          isThreaded: !!previousDreamText
+        });
+      } catch (err) {
+        console.error("History kaydedilirken hata:", err);
+      }
+
     } catch (error) {
       console.error("ANALİZ HATASI:", error);
-      console.log("Gidilecek URL:", process.env.EXPO_PUBLIC_API_URL);
-      const errorMessage =
-        error instanceof Error ? error.message : "Bilinmeyen bir hata.";
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen bir hata.";
       Alert.alert("Hata Detayı", errorMessage);
     } finally {
-      // 2. DÜZELTME: Animasyonun yarım kalmaması için en az 2 saniye bekle
       const elapsedTime = Date.now() - startTime;
-      const minWait = 2500; // 2.5 saniye mistik bir bekleme
+      const minWait = 2500;
 
       if (elapsedTime < minWait) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, minWait - elapsedTime),
-        );
+        await new Promise((resolve) => setTimeout(resolve, minWait - elapsedTime));
       }
 
       setIsLoading(false);
@@ -115,10 +139,28 @@ export default function IndexScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { backgroundColor: "#6c2e9c" }]}
+      style={[styles.container, { backgroundColor: "#120a1f" }]}
     >
-      <MysticLoader visible={isLoading} />
+      <MysticLoader visible={isLoading || isWatchingAd} />
       <StatusBar barStyle="light-content" />
+      
+      {/* HEADER: Profile Icon */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity 
+          style={styles.profileButton} 
+          onPress={() => {
+            if (user && !user.isAnonymous) {
+              router.push('/profile');
+            } else {
+              router.push('/auth');
+            }
+          }}
+        >
+          <Ionicons name="person-circle-outline" size={36} color="#e8dcf8" />
+          {isAnonymous && <View style={styles.notificationDot} />}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
@@ -128,12 +170,11 @@ export default function IndexScreen() {
           Bilinçaltının derinliklerine yolculuk...
         </Text>
 
-        {/* 4. DÜZELTME: Input container mor temaya uygun şekilde revize edildi */}
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
             placeholder="Ne gördün? Anlat bakalım..."
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor="rgba(255,255,255,0.3)"
             multiline
             numberOfLines={4}
             value={dream}
@@ -141,34 +182,51 @@ export default function IndexScreen() {
           />
         </View>
 
-        {/* 1. DÜZELTME: Loading butonu eklendi */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[
               styles.button,
-              (!dream.trim() ||
-                isLoading ||
-                (remainingRequests !== null && remainingRequests <= 0)) &&
-              styles.buttonDisabled,
+              (!dream.trim() || isLoading) && styles.buttonDisabled,
             ]}
             onPress={analyzeDream}
-            disabled={
-              !dream.trim() ||
-              isLoading ||
-              (remainingRequests !== null && remainingRequests <= 0)
-            }
+            disabled={!dream.trim() || isLoading}
           >
             {isLoading ? (
-              // Düzeltme: Bekleme sırasında dönen yükleme simgesi (Rengi Mor yapıldı ki görünsün!)
-              <ActivityIndicator color="#6c2e9c" size="small" />
+              <ActivityIndicator color="#120a1f" size="small" />
             ) : (
               <Text style={styles.buttonText}>Kehaneti Al ✨</Text>
             )}
           </TouchableOpacity>
-          {remainingRequests !== null && (
-            <Text style={styles.quotaText}>
-              Günlük Kehanet Hakkı: {remainingRequests}/3
-            </Text>
+          
+          <EnergyBar 
+            credits={credits} 
+            currentAdProgress={currentAdProgress}
+            requiredAds={requiredAds}
+            isDeveloper={isDeveloper} 
+          />
+
+          {credits === 0 && !isDeveloper && (
+            <View style={styles.outOfEnergyContainer}>
+              {isAnonymous ? (
+                <View style={styles.guestPremiumBox}>
+                  <Text style={styles.guestPremiumText}>
+                    Misafirlerin enerji depolama yeteneği kısıtlıdır. Hesabını bağla ve her gün ücretsiz enerji kazan!
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.premiumButton}
+                    onPress={() => router.push('/auth')}
+                  >
+                    <Text style={styles.premiumButtonText}>Kayıt Ol & Enerji Kazan</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={showAdToEarnCredit} style={{marginTop: 10}}>
+                   <Text style={[styles.quotaText, { color: '#03dac6', textDecorationLine: 'underline' }]}>
+                     Gölgeyle Yüzleş (Enerji Topla)
+                   </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
@@ -189,24 +247,26 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 36,
     fontWeight: "900",
-    color: "#fff",
+    color: "#e8dcf8",
     textAlign: "center",
     letterSpacing: 2,
+    textShadowColor: "rgba(108, 46, 156, 0.8)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
   },
   subtitle: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(232, 220, 248, 0.6)",
     textAlign: "center",
     marginBottom: 30,
     fontStyle: "italic",
   },
   inputContainer: {
-    // Düzeltme: Mor temaya uygun semi-transparan input kutusu
-    backgroundColor: "rgba(0,0,0,0.2)",
+    backgroundColor: "rgba(0,0,0,0.3)",
     borderRadius: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(108, 46, 156, 0.3)",
   },
   input: {
     color: "#fff",
@@ -216,26 +276,89 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   button: {
-    // Düzeltme: Mor temanın üstüne şık, beyaz, eliptik buton
-    backgroundColor: "#fff",
+    backgroundColor: "#e8dcf8",
     paddingVertical: 18,
     borderRadius: 50,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    elevation: 6,
+    shadowColor: "#6c2e9c",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#6c2e9c", fontSize: 18, fontWeight: "bold" },
+  buttonText: { color: "#120a1f", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
   buttonContainer: {
     marginBottom: 10,
   },
   quotaText: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(255,255,255,0.5)",
     textAlign: "center",
     marginTop: 15,
     fontSize: 12,
     fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  headerBar: {
+    position: 'absolute',
+    top: 55, 
+    right: 25,
+    zIndex: 10,
+  },
+  profileButton: {
+    position: 'relative',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 0,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#ff0055',
+    borderWidth: 2,
+    borderColor: '#120a1f',
+    shadowColor: '#ff0055',
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+  },
+  outOfEnergyContainer: {
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  guestPremiumBox: {
+    backgroundColor: 'rgba(108, 46, 156, 0.15)',
+    padding: 18,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 46, 156, 0.5)',
+    alignItems: 'center',
+    width: '100%',
+  },
+  guestPremiumText: {
+    color: '#e8dcf8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  premiumButton: {
+    backgroundColor: '#6c2e9c',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+    shadowColor: '#6c2e9c',
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  premiumButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
     letterSpacing: 0.5,
   },
 });

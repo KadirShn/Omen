@@ -22,6 +22,7 @@ export default {
     try {
       const body: any = await request.json();
       const dreamText = body.dream;
+      const previousDream = body.previousDream;
 
       if (!dreamText) {
         return new Response(JSON.stringify({ error: "Rüya metni eksik" }), {
@@ -30,16 +31,22 @@ export default {
         });
       }
 
-      // 2. Gemini API İstek Gövdesi (Prompt gizlenmiş oldu!)
-      const prompt = `Sen mistik bir rüya kahinisin. 
-      Kullanıcının rüyası: "${dreamText}"
-      Lütfen yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir metin veya markdown işareti ekleme. Renk kodu her zaman #6c2e9c (Mistik Mor) olsun.
+      // 2. Gemini API İstek Gövdesi & Prompt Mühendisliği
+      const previousDreamContext = previousDream 
+        ? `Kullanıcının bir önceki rüyası veya analizi: "${previousDream}". Lütfen bu önceki rüya ile şu anki rüya arasında gizli bağlantılar veya sembolik bir devamlılık var mı analiz et ve yorumunda belirt.`
+        : "";
+
+      const prompt = `Sen mistik bir rüya kahini ve usta bir Jungçu psikanalistsin. 
+      Kullanıcının şu anki rüyası: "${dreamText}"
+      ${previousDreamContext}
+      
+      Lütfen yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir metin veya markdown işareti ekleme:
       {
-        "yorum": "Rüyanın mistik, biraz absürt ve eğlenceli yorumu (3-4 cümle)",
-        "mood": "korku" | "huzur" | "macera" | "gizem",
-        "renk": "#6c2e9c",
-        "semboller": ["sembol1", "sembol2"],
-        "gorsel_betimleme": "Bu rüyayı anlatan sanatsal bir resim betimlemesi (tek cümle)"
+        "interpretation": "Rüyanın mistik ve derin psikolojik yorumu, arketipleri ve (varsa) önceki rüya ile bağlantısını içeren 3-4 cümle.",
+        "primaryEmotion": "Rüyadaki ana duygu (örn: Korku, Awe, Huzur, Heyecan)",
+        "moodScore": 8,
+        "archetypes": ["Gölge", "Anima", "Kahraman"],
+        "gorsel_betimleme": "Bu rüyayı anlatan sanatsal, mistik, sürreal bir dijital resim betimlemesi (İngilizce ve tek cümle)"
       }`;
 
       // Gemini 1.5 Flash kullanımı
