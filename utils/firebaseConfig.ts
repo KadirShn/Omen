@@ -1,7 +1,8 @@
 // utils/firebaseConfig.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Firebase yapılandırma ayarlarınız (Bunları .env'den almanız en güvenlisi)
 const firebaseConfig = {
@@ -13,8 +14,19 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "dummy-app-id",
 };
 
-// Uygulama daha önce başlatılmış mı kontrol et (Expo Hot Reload hatalarını önler)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+let app;
+let auth: ReturnType<typeof getAuth>;
 
-export const auth = getAuth(app);
+// Uygulama daha önce başlatılmış mı kontrol et (Expo Hot Reload hatalarını önler)
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} else {
+  app = getApp();
+  auth = getAuth(app);
+}
+
+export { auth };
 export const db = getFirestore(app);

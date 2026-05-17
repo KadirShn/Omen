@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "omen",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#000000",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -22,7 +23,10 @@
         "backgroundImage": "./assets/images/icon.png",
         "monochromeImage": "./assets/images/icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tameklive.Omen",
+      "backgroundColor": "#000000",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
@@ -45,7 +49,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-9093667472808260~1160438960",
           "iosAppId": "ca-app-pub-3940256099942544~1458041367"
         }
       ],

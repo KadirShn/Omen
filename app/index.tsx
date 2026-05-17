@@ -164,7 +164,7 @@ export default function IndexScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.container, { backgroundColor: "#120a1f" }]}
     >
       <MysticLoader visible={isLoading || isWatchingAd} />

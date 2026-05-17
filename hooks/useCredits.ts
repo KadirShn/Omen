@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
+import { useRewardedAd } from 'react-native-google-mobile-ads';
 
-// --- MOCK ADMOB: Commented out for Expo Go testing ---
-// import { RewardedAd, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
-// const adUnitId = __DEV__ ? TestIds.REWARDED : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy';
-// const rewarded = RewardedAd.createForAdRequest(adUnitId, { keywords: ['dream', 'spirituality', 'psychology'] });
+const adUnitId = __DEV__ 
+  ? 'ca-app-pub-3940256099942544/5224354917' 
+  : 'ca-app-pub-9093667472808260/8819666043';
 
 export const useCredits = () => {
   const { user } = useAuth();
@@ -17,11 +17,68 @@ export const useCredits = () => {
   const [dailyCreditsEarned, setDailyCreditsEarned] = useState<number>(0);
   
   const [isDeveloper, setIsDeveloper] = useState(false);
-  const [adLoaded, setAdLoaded] = useState(true); // Mock is always loaded
   const [isWatchingAd, setIsWatchingAd] = useState(false);
 
   // The dynamic formula
   const requiredAds = 2 + dailyCreditsEarned;
+
+  const { isLoaded, isClosed, isEarnedReward, load, show } = useRewardedAd(adUnitId, {
+    keywords: ['dream', 'spirituality', 'psychology']
+  });
+
+  const [rewardGrantedForCurrentAd, setRewardGrantedForCurrentAd] = useState(false);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (isClosed) {
+      setIsWatchingAd(false);
+      setRewardGrantedForCurrentAd(false);
+      load();
+    }
+  }, [isClosed, load]);
+
+  useEffect(() => {
+    if (isEarnedReward && !rewardGrantedForCurrentAd && user) {
+      setRewardGrantedForCurrentAd(true);
+      
+      const grantReward = async () => {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(userRef);
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const currentProgress = data.currentAdProgress ?? 0;
+            const currentDailyEarned = data.dailyCreditsEarned ?? 0;
+            
+            const currentReqAds = 2 + currentDailyEarned;
+            const newProgress = currentProgress + 1;
+            
+            if (newProgress >= currentReqAds) {
+               // Reached target -> +1 credit, reset progress, increase fatigue
+               await updateDoc(userRef, {
+                 credits: increment(1),
+                 currentAdProgress: 0,
+                 dailyCreditsEarned: increment(1)
+               });
+            } else {
+               // Just step forward in progress
+               await updateDoc(userRef, {
+                 currentAdProgress: newProgress
+               });
+            }
+          }
+        } catch (error) {
+          console.log("[useCredits]: Failed to process ad reward", error);
+        }
+      };
+
+      grantReward();
+    }
+  }, [isEarnedReward, rewardGrantedForCurrentAd, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -89,30 +146,6 @@ export const useCredits = () => {
     return () => unsubscribe();
   }, [user]);
 
-  /* --- MOCK ADMOB LOGIC START --- */
-  // useEffect(() => {
-  //   const unsubscribeLoaded = rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => setAdLoaded(true));
-  //   
-  //   const unsubscribeEarned = rewarded.addAdEventListener(
-  //     RewardedAdEventType.EARNED_REWARD,
-  //     async (reward) => { /* Update this logic when un-mocked */ }
-  //   );
-  //
-  //   const unsubscribeClosed = rewarded.addAdEventListener(RewardedAdEventType.CLOSED, () => {
-  //      setAdLoaded(false);
-  //      rewarded.load();
-  //   });
-  //
-  //   rewarded.load();
-  //
-  //   return () => {
-  //     unsubscribeLoaded();
-  //     unsubscribeEarned();
-  //     unsubscribeClosed();
-  //   };
-  // }, [user]);
-  /* --- MOCK ADMOB LOGIC END --- */
-
   const deductCredit = useCallback(async (): Promise<boolean> => {
     // 1. The Developer Bypass
     if (isDeveloper) return true;
@@ -138,43 +171,14 @@ export const useCredits = () => {
   }, [credits, isDeveloper, user]);
 
   const showAdToEarnCredit = useCallback(async () => {
-    /* --- MOCK ADMOB FLOW --- */
-    setIsWatchingAd(true);
-    
-    // Simulate watching video
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Progressive Fatigue Reward Logic
-    if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(userRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const currentProgress = data.currentAdProgress ?? 0;
-          const currentDailyEarned = data.dailyCreditsEarned ?? 0;
-          
-          const currentReqAds = 2 + currentDailyEarned;
-          const newProgress = currentProgress + 1;
-          
-          if (newProgress >= currentReqAds) {
-             // Reached target -> +1 credit, reset progress, increase fatigue
-             await updateDoc(userRef, {
-               credits: increment(1),
-               currentAdProgress: 0,
-               dailyCreditsEarned: increment(1)
-             });
-          } else {
-             // Just step forward in progress
-             await updateDoc(userRef, {
-               currentAdProgress: newProgress
-             });
-          }
-        }
+    if (isLoaded) {
+      setIsWatchingAd(true);
+      show();
+    } else {
+      console.log("Ad not loaded yet.");
+      load();
     }
-    
-    setIsWatchingAd(false);
-  }, [user]);
+  }, [isLoaded, show, load]);
 
   return {
     credits,
@@ -183,7 +187,7 @@ export const useCredits = () => {
     isDeveloper,
     deductCredit,
     showAdToEarnCredit,
-    isAdLoaded: adLoaded,
+    isAdLoaded: isLoaded,
     isWatchingAd,
   };
 };

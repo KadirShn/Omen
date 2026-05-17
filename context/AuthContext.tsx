@@ -11,6 +11,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 interface AuthContextData {
   user: User | null;
   loading: boolean;
+  isAuthReady: boolean;
   isDeveloper: boolean;
   isAnonymous: boolean;
   logout: () => Promise<void>;
@@ -19,6 +20,7 @@ interface AuthContextData {
 const AuthContext = createContext<AuthContextData>({
   user: null,
   loading: true,
+  isAuthReady: false,
   isDeveloper: false,
   isAnonymous: true,
   logout: async () => {},
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthContextData>({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [isDeveloper, setIsDeveloper] = useState(false);
 
   useEffect(() => {
@@ -65,6 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
       setLoading(false);
+      setIsAuthReady(true);
     });
 
     return () => unsubscribe();
@@ -84,6 +88,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{ 
         user, 
         loading, 
+        isAuthReady,
         isDeveloper, 
         isAnonymous: user?.isAnonymous ?? true,
         logout
