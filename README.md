@@ -1,50 +1,79 @@
-# Welcome to your Expo app 👋
+# 🔮 Omen - Yapay Zeka Destekli Rüya Analizi
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Omen, kullanıcıların rüyalarını en ince ayrıntısına kadar analiz eden, bilinçaltının derinliklerindeki sembolleri ve mesajları ortaya çıkaran mistik temalı bir mobil uygulamadır. Gelişmiş yapay zeka (Gemini API) altyapısı kullanarak sıradan rüya tabirlerinin ötesine geçer ve kullanıcıya özel psikolojik/mistik okumalar sunar.
 
-## Get started
+## ✨ Öne Çıkan Özellikler
 
-1. Install dependencies
+* **Yapay Zeka ile Derin Analiz:** Kullanıcının girdiği rüya metinleri, Gemini API tarafından mistik bir kahin personasıyla analiz edilir.
+* **Rüya Günlüğü:** Yapılan tüm analizler, kullanıcının geçmişe dönük inceleyebilmesi için güvenli bir şekilde bulutta (Firebase) saklanır.
+* **Mistik Enerji Sistemi:** Kullanıcılar, rüya analizi ("Kehanet") alabilmek için enerji harcarlar. Enerji sistemi, AdMob ödüllü reklam entegrasyonu ile desteklenmektedir.
+* **Baskın Duygu ve Arketip Tespiti:** Yapay zeka, rüyadaki temel duyguyu ve Jungiyen arketipleri (Örn: Bilge Yaşlı, Kendilik) tespit ederek etiketler.
+* **Premium Karanlık Tema:** Gece uykusundan uyanan kullanıcıların gözünü yormayacak şekilde tasarlanmış pürüzsüz ve gizemli UI/UX tasarımı.
 
-   ```bash
-   npm install
-   ```
+## 📱 Ekran Görüntüleri
 
-2. Start the app
+<p align="center">
+  <img src="screenshots/ss3.png" width="19%" />
+   <img src="screenshots/ss4.png" width="19%" />
+  <img src="screenshots/ss1.png" width="19%" />
+  <img src="screenshots/ss2.png" width="19%" />
+  <img src="screenshots/ss5.png" width="19%" />
+</p>
 
-   ```bash
-   npx expo start
-   ```
+> *Sırasıyla: Giriş/Kayıt Ekranı, Rüya Girişi & Kehanet Alma, Analiz Sonucu & Görselleştirme, Kullanıcı Profili & Enerji Yönetimi*
 
-In the output, you'll find options to open the app in a
+## 🛠 Kullanılan Teknolojiler (Tech Stack)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Bu proje, modern mobil geliştirme standartlarına uygun olarak inşa edilmiştir:
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+* **Frontend:** React Native, Expo
+* **Backend / BaaS:** Firebase (Authentication, Cloud Firestore)
+* **Yapay Zeka:** Google Gemini API
+* **Monetizasyon:** Google AdMob (Ödüllü Reklamlar)
+* **Analitik & Hata Takibi:** Firebase Crashlytics & Analytics
 
-## Get a fresh project
+## 🚀 Kurulum ve Çalıştırma
 
-When you're ready, run:
+Projeyi kendi yerel ortamınızda (local) çalıştırmak için aşağıdaki adımları izleyebilirsiniz:
 
-```bash
-npm run reset-project
-```
+### 1. Depoyu Klonlayın
+`bash
+git clone https://github.com/kadirshn/omen-app.git
+cd omen-app
+`
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Bağımlılıkları Yükleyin
+`bash
+npm install
+# veya
+yarn install
+`
 
-## Learn more
+### 3. Çevresel Değişkenleri (Environment Variables) Ayarlayın
+Projenin kök dizininde bir `.env` dosyası oluşturun ve aşağıdaki anahtarları kendi projenize göre doldurun:
+`env
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+EXPO_PUBLIC_ADMOB_AD_UNIT_ID=your_admob_unit_id
+`
 
-To learn more about developing your project with Expo, look at the following resources:
+### 4. Uygulamayı Başlatın
+`bash
+npx expo start
+`
+*Bu komut sonrası açılan terminaldeki QR kodu okutarak Expo Go uygulaması üzerinden veya bilgisayarınızdaki Android/iOS emülatörleri ile projeyi çalıştırabilirsiniz.*
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 🔒 Güvenlik ve Mimari Notları
 
-## Join the community
+* Uygulama, Google Play inceleme süreçleri göz önünde bulundurularak geliştirilmiştir.
+* AdMob reklamlarının yüklenemediği durumlarda (örn. test ortamları veya ağ kısıtlamaları), uygulama akışının kesilmemesi için **Fallback (B Planı)** mekanizmaları koda entegre edilmiştir.
+* Gemini API istekleri, zaman aşımı ve format hatalarına karşı robust `try/catch` blokları ile korunmaktadır.
 
-Join our community of developers creating universal apps.
+## 👨‍💻 Geliştirici
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**Kadir Sahin** - Yazılım Mühendisi | React Native & .NET Geliştiricisi
