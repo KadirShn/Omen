@@ -111,17 +111,36 @@ export default function IndexScreen() {
 
       // Cloudflare Worker İsteği
       abortControllerRef.current = new AbortController();
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dream: dream, previousDream: previousDreamText }),
-        signal: abortControllerRef.current.signal,
-      });
+      const timeoutId = setTimeout(() => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }, 15000); // 15 seconds timeout
 
-      const data = await response.json();
+      let data;
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dream: dream, previousDream: previousDreamText }),
+          signal: abortControllerRef.current.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || "Mistisizmde bir kırılma yaşandı.");
+        clearTimeout(timeoutId);
+
+        const responseText = await response.text();
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          throw new Error("Ruhsal alemden gelen mesaj anlaşılamadı. Lütfen tekrar dene.");
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Mistisizmde bir kırılma yaşandı.");
+        }
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        throw fetchErr;
       }
 
       setResult(data);
@@ -147,7 +166,18 @@ export default function IndexScreen() {
 
     } catch (error: any) {
       console.log("[Analyze Error Handled Gracefully]:", error.message || error.code);
-      setErrorMsg(t("index.errors.fallback"));
+      let alertMsg = error.message || t("index.errors.fallback");
+      
+      if (error.name === "AbortError" || error.message?.includes("aborted")) {
+        alertMsg = "Ruhsal alemden yanıt alınamadı (Zaman aşımı). Lütfen tekrar dene.";
+      }
+
+      setErrorMsg(alertMsg);
+      Alert.alert(
+        "Ruhsal Bağlantı Sorunu",
+        alertMsg,
+        [{ text: "Tamam", style: "cancel" }]
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       const elapsedTime = Date.now() - startTime;

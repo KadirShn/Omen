@@ -24,7 +24,8 @@
         "monochromeImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tameklive.Omen",
+      "package": "com.kadirshn.omen",
+      "versionCode": 3,
       "backgroundColor": "#000000",
       "softwareKeyboardLayoutMode": "resize"
     },
@@ -46,18 +47,22 @@
           }
         }
       ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-9093667472808260~1160438960",
-          "iosAppId": "ca-app-pub-3940256099942544~1458041367"
-        }
-      ],
+      "react-native-google-mobile-ads",
       "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "077a6cd5-2246-433c-ad9d-fb7541246256"
+      }
     }
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-9093667472808260~1160438960",
+    "ios_app_id": "ca-app-pub-3940256099942544~1458041367"
   }
 }

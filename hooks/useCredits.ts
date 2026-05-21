@@ -22,11 +22,63 @@ export const useCredits = () => {
   // The dynamic formula
   const requiredAds = 2 + dailyCreditsEarned;
 
-  const { isLoaded, isClosed, isEarnedReward, load, show } = useRewardedAd(adUnitId, {
+  const { isLoaded, isClosed, isEarnedReward, load, show, error } = useRewardedAd(adUnitId, {
     keywords: ['dream', 'spirituality', 'psychology']
   });
 
   const [rewardGrantedForCurrentAd, setRewardGrantedForCurrentAd] = useState(false);
+  const [adErrorOccurred, setAdErrorOccurred] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      console.log("[useCredits]: Ad error occurred:", error);
+      setAdErrorOccurred(true);
+    }
+  }, [error]);
+
+  const grantEnergyFallback = useCallback(async () => {
+    if (!user) return;
+    console.log("[AdMob Fallback]: Bypassing ad, granting Mystic Energy directly.");
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        credits: increment(1)
+      });
+    } catch (err) {
+      console.log("[AdMob Fallback]: Failed to grant energy", err);
+    }
+  }, [user]);
+
+  const grantReward = useCallback(async () => {
+    try {
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const currentProgress = data.currentAdProgress ?? 0;
+        const currentDailyEarned = data.dailyCreditsEarned ?? 0;
+        
+        const currentReqAds = 2 + currentDailyEarned;
+        const newProgress = currentProgress + 1;
+        
+        if (newProgress >= currentReqAds) {
+           await updateDoc(userRef, {
+             credits: increment(1),
+             currentAdProgress: 0,
+             dailyCreditsEarned: increment(1)
+           });
+        } else {
+           await updateDoc(userRef, {
+             currentAdProgress: newProgress
+           });
+        }
+      }
+    } catch (error) {
+      console.log("[useCredits]: Failed to process ad reward", error);
+    }
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -43,42 +95,9 @@ export const useCredits = () => {
   useEffect(() => {
     if (isEarnedReward && !rewardGrantedForCurrentAd && user) {
       setRewardGrantedForCurrentAd(true);
-      
-      const grantReward = async () => {
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const docSnap = await getDoc(userRef);
-          
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            const currentProgress = data.currentAdProgress ?? 0;
-            const currentDailyEarned = data.dailyCreditsEarned ?? 0;
-            
-            const currentReqAds = 2 + currentDailyEarned;
-            const newProgress = currentProgress + 1;
-            
-            if (newProgress >= currentReqAds) {
-               // Reached target -> +1 credit, reset progress, increase fatigue
-               await updateDoc(userRef, {
-                 credits: increment(1),
-                 currentAdProgress: 0,
-                 dailyCreditsEarned: increment(1)
-               });
-            } else {
-               // Just step forward in progress
-               await updateDoc(userRef, {
-                 currentAdProgress: newProgress
-               });
-            }
-          }
-        } catch (error) {
-          console.log("[useCredits]: Failed to process ad reward", error);
-        }
-      };
-
       grantReward();
     }
-  }, [isEarnedReward, rewardGrantedForCurrentAd, user]);
+  }, [isEarnedReward, rewardGrantedForCurrentAd, user, grantReward]);
 
   useEffect(() => {
     if (!user) return;
@@ -152,6 +171,12 @@ export const useCredits = () => {
     
     // 2. Not enough credits
     if (credits === null || credits <= 0) {
+      // AdMob Fallback: If ad failed to load/show, bypass and grant energy automatically
+      if (adErrorOccurred || error) {
+        console.log("[AdMob Fallback]: Ad blocked or failed. Bypassing and granting energy.");
+        await grantEnergyFallback();
+        return true; // Proceed directly!
+      }
       return false;
     }
 
@@ -173,12 +198,22 @@ export const useCredits = () => {
   const showAdToEarnCredit = useCallback(async () => {
     if (isLoaded) {
       setIsWatchingAd(true);
-      show();
+      try {
+        show();
+      } catch (err) {
+        console.log("Failed to show ad:", err);
+        setIsWatchingAd(false);
+        await grantEnergyFallback();
+      }
     } else {
       console.log("Ad not loaded yet.");
-      load();
+      if (adErrorOccurred || error) {
+        await grantEnergyFallback();
+      } else {
+        load();
+      }
     }
-  }, [isLoaded, show, load]);
+  }, [isLoaded, show, load, adErrorOccurred, error, grantEnergyFallback]);
 
   return {
     credits,
