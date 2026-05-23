@@ -71,10 +71,18 @@ export default function IndexScreen() {
       return;
     }
 
-    if (!user) {
-      setErrorMsg(t("index.errors.noConnection"));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
+    let currentUser = user;
+    if (!currentUser) {
+      try {
+        const { auth } = require("../utils/firebaseConfig");
+        const { signInAnonymously } = require("firebase/auth");
+        const userCredential = await signInAnonymously(auth);
+        currentUser = userCredential.user;
+      } catch (err) {
+        setErrorMsg(t("index.errors.noConnection"));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -100,7 +108,7 @@ export default function IndexScreen() {
       let previousDreamText = "";
       try {
         const historyRef = collection(db, "dream_history");
-        const q = query(historyRef, where("uid", "==", user.uid), orderBy("createdAt", "desc"), limit(1));
+        const q = query(historyRef, where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(1));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           previousDreamText = querySnapshot.docs[0].data().dreamInputText;
@@ -148,7 +156,7 @@ export default function IndexScreen() {
       // Sonucu History Koleksiyonuna Kaydetme
       try {
         await addDoc(collection(db, "dream_history"), {
-          uid: user.uid,
+          uid: currentUser.uid,
           createdAt: new Date().toISOString(),
           dreamInputText: dream,
           aiAnalysis: {
@@ -252,10 +260,10 @@ export default function IndexScreen() {
           <TouchableOpacity
             style={[
               styles.button,
-              (!dream.trim() || isLoading) && styles.buttonDisabled,
+              isLoading && styles.buttonDisabled,
             ]}
             onPress={analyzeDream}
-            disabled={!dream.trim() || isLoading}
+            disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="#120a1f" size="small" />
