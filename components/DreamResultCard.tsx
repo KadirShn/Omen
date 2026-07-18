@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Dimensions, Image, ActivityIndicator, Animated } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Dimensions, Image, ActivityIndicator, Animated, TouchableOpacity } from "react-native";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -11,12 +11,15 @@ interface DreamResultCardProps {
     archetypes: string[];
     gorsel_betimleme: string;
     gorsel_url?: string;
+    requestId?: string;
   };
+  onReport?: () => void;
 }
 
-export function DreamResultCard({ result }: DreamResultCardProps) {
+export function DreamResultCard({ result, onReport }: DreamResultCardProps) {
   const [typedText, setTypedText] = useState("");
   const [isImageLoading, setIsImageLoading] = useState(true);
+  const [imageFailed, setImageFailed] = useState(false);
   
   // Fade in animation for the whole card
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -25,6 +28,8 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
     if (result?.interpretation) {
       let index = 0;
       setTypedText("");
+      setIsImageLoading(true);
+      setImageFailed(false);
       const textToType = result.interpretation;
 
       const interval = setInterval(() => {
@@ -103,7 +108,7 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
 
       {/* 4. Cinematic Dream Vision (Image) */}
       <Text style={styles.aiArtHeader}>🖼️ Rüya Vizyonu:</Text>
-      {result.gorsel_url && (
+      {result.gorsel_url && !imageFailed && (
         <View style={styles.imageContainer}>
           {isImageLoading && (
             <View style={styles.imageLoaderContainer}>
@@ -116,8 +121,26 @@ export function DreamResultCard({ result }: DreamResultCardProps) {
             style={styles.dreamImage} 
             resizeMode="cover" 
             onLoad={() => setIsImageLoading(false)}
+            onError={() => {
+              setIsImageLoading(false);
+              setImageFailed(true);
+            }}
           />
         </View>
+      )}
+      {imageFailed && (
+        <Text style={styles.imageError}>Rüya görseli şu anda yüklenemedi.</Text>
+      )}
+
+      {onReport && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="AI çıktısını bildir"
+          style={styles.reportButton}
+          onPress={onReport}
+        >
+          <Text style={styles.reportText}>⚑ AI çıktısını bildir</Text>
+        </TouchableOpacity>
       )}
     </Animated.View>
   );
@@ -249,5 +272,22 @@ const styles = StyleSheet.create({
     height: "100%",
     position: "absolute",
     zIndex: 2,
+  },
+  imageError: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 13,
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+  reportButton: {
+    alignSelf: "center",
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  reportText: {
+    color: "rgba(232,220,248,0.65)",
+    fontSize: 12,
+    textDecorationLine: "underline",
   },
 });

@@ -1,23 +1,53 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 1. KULLANICI PROFİLİ VE EKONOMİ KİLİDİ
-    match /users/{userId} {
-      // Sadece profil sahibi okuyabilir ve dökümanı ilk kez oluşturabilir
-      allow read, create: if request.auth != null && request.auth.uid == userId;
-      
-      // Kredi suistimalini önleme: Kullanıcı kredilerini kafasına göre +1000 artıramaz.
-      // Sadece 1'er 1'er harcamasına (azalmasına) veya sistemin günlük +1 vermesine izin veririz.
-      allow update: if request.auth != null && request.auth.uid == userId 
-                    && (request.resource.data.credits <= resource.data.credits + 1);
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
 
-    // 2. RÜYA GEÇMİŞİ VERİ GİZLİLİĞİ (Data Privacy)
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // The client may only bootstrap its own minimal profile. Credits and all
+      // economy fields are updated by the authenticated backend.
+      allow create: if isOwner(userId)
+                    && request.resource.data.keys().hasOnly([
+                      'createdAt', 'credits', 'isDeveloper'
+                    ])
+                    && request.resource.data.isDeveloper == false
+                    && request.resource.data.credits == (
+                      request.auth.token.firebase.sign_in_provider == 'anonymous' ? 2 : 5
+                    );
+
+      allow update, delete: if false;
+    }
+
     match /dream_history/{docId} {
-      // Kullanıcı sadece kendi UID'si ile eşleşen rüyaları okuyabilir, yazabilir ve silebilir.
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      allow read, update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly([
+                      'uid', 'createdAt', 'dreamInputText', 'aiAnalysis',
+                      'imageUrl', 'requestId', 'isThreaded'
+                    ])
+                    && request.resource.data.dreamInputText is string
+                    && request.resource.data.dreamInputText.size() <= 3000;
+      allow read, delete: if request.auth != null
+                          && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // These collections are private backend data.
+    match /content_reports/{document=**} {
+      allow read, write: if false;
+    }
+    match /deletion_requests/{document=**} {
+      allow read, write: if false;
+    }
+    match /rate_limits/{document=**} {
+      allow read, write: if false;
+    }
+    match /ad_reward_events/{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -8,9 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -21,6 +19,8 @@ import {
   signInWithEmailAndPassword,
   linkWithCredential,
   EmailAuthProvider,
+  sendEmailVerification,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
@@ -82,11 +82,13 @@ export default function AuthScreen() {
       } else {
         if (isAnonymous && user) {
           const credential = EmailAuthProvider.credential(email.trim(), password);
-          await linkWithCredential(user, credential);
+          const linked = await linkWithCredential(user, credential);
+          await sendEmailVerification(linked.user);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           // Alert removed for pure cinematic flow; user is seamlessly routed.
         } else {
-          await createUserWithEmailAndPassword(auth, email.trim(), password);
+          const created = await createUserWithEmailAndPassword(auth, email.trim(), password);
+          await sendEmailVerification(created.user);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         router.replace('/');
@@ -99,6 +101,20 @@ export default function AuthScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setErrorMsg(t('auth.enterEmailForReset'));
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      setErrorMsg(t('auth.resetEmailSent'));
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.code));
     }
   };
 
@@ -198,6 +214,11 @@ export default function AuthScreen() {
               {isLoginMode ? t('auth.switchSignup') : t('auth.switchLogin')}
             </Text>
           </TouchableOpacity>
+          {isLoginMode && (
+            <TouchableOpacity style={styles.resetButton} onPress={handlePasswordReset}>
+              <Text style={styles.resetText}>{t('auth.forgotPassword')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -329,6 +350,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,
+    textDecorationLine: 'underline',
+  },
+  resetButton: {
+    alignItems: 'center',
+    padding: 10,
+  },
+  resetText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
     textDecorationLine: 'underline',
   },
 });

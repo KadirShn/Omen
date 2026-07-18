@@ -1,6 +1,9 @@
+import { Ionicons } from "@expo/vector-icons";
+import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
-import React, { useState, useEffect, useRef } from "react";
-import NetInfo from '@react-native-community/netinfo';
+import { useRouter } from "expo-router";
+import { addDoc, collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,444 +15,268 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
-import { collection, query, where, orderBy, limit, getDocs, addDoc } from "firebase/firestore";
+import { useTranslation } from "react-i18next";
 import { DreamResultCard } from "../components/DreamResultCard";
 import { EnergyBar } from "../components/EnergyBar";
 import { MysticLoader } from "../components/MysticLoader";
 import { useAuth } from "../context/AuthContext";
 import { useCredits } from "../hooks/useCredits";
+import { analyzeDreamApi, ApiError, DreamAnalysis, reportAiContent } from "../utils/api";
 import { db } from "../utils/firebaseConfig";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useTranslation } from "react-i18next";
-
-// Cloudflare Worker API adresiniz (bunu daha sonra .env üzerinden çekeceğiz)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://omen-proxy.shnkadir.workers.dev"; // Güncelledik
 
 export default function IndexScreen() {
   const { user, isAnonymous } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
-  const { credits, currentAdProgress, requiredAds, isDeveloper, deductCredit, showAdToEarnCredit, isAdLoaded, isWatchingAd } = useCredits();
-  
+  const {
+    credits,
+    currentAdProgress,
+    requiredAds,
+    isDeveloper,
+    showAdToEarnCredit,
+    isAdLoaded,
+    isWatchingAd,
+    adMessage,
+  } = useCredits();
+
   const [dream, setDream] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<DreamAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isCooldown, setIsCooldown] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+  const getPreviousDream = async (uid: string) => {
+    try {
+      const historyQuery = query(
+        collection(db, "dream_history"),
+        where("uid", "==", uid),
+        orderBy("createdAt", "desc"),
+        limit(1),
+      );
+      const snapshot = await getDocs(historyQuery);
+      return snapshot.empty ? "" : String(snapshot.docs[0].data().dreamInputText ?? "");
+    } catch (error) {
+      console.warn("[History] Previous dream unavailable", error);
+      return "";
+    }
+  };
+
+  const friendlyApiError = (error: unknown) => {
+    if (!(error instanceof ApiError)) return t("index.errors.fallback");
+    const messages: Record<string, string> = {
+      NO_CREDITS: t("index.errors.outOfEnergy"),
+      CONTENT_BLOCKED: "Bu içerik güvenlik nedeniyle analiz edilemedi.",
+      RATE_LIMITED: "Çok hızlı istek gönderildi. Lütfen biraz bekle.",
+      TIMEOUT: "Yanıt zaman aşımına uğradı. Kredin iade edildi; tekrar deneyebilirsin.",
+      INVALID_DREAM: "Rüyan 10–3000 karakter arasında olmalı.",
+      UNAUTHORIZED: "Oturum doğrulanamadı. Uygulamayı yeniden açıp tekrar dene.",
+      NETWORK_ERROR: "Bağlantı kurulamadı. İnternetini kontrol et.",
     };
-  }, []);
+    return messages[error.code] ?? t("index.errors.fallback");
+  };
 
   const analyzeDream = async () => {
     setErrorMsg("");
-    
+    const normalizedDream = dream.trim();
+
     if (isCooldown) {
-      setErrorMsg("Mistik enerjilerin dengelenmesi için biraz beklemelisin.");
+      setErrorMsg("Yeni bir analiz için birkaç saniye beklemelisin.");
+      return;
+    }
+    if (normalizedDream.length < 10) {
+      setErrorMsg("Rüyanı en az 10 karakterle anlatmalısın.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-
-    const networkState = await NetInfo.fetch();
-    if (!networkState.isConnected) {
-      setErrorMsg("Ruhsal alemle bağlantın kesildi. Lütfen internetini kontrol et.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    if (normalizedDream.length > 3000) {
+      setErrorMsg("Rüya metni en fazla 3000 karakter olabilir.");
       return;
     }
-
-    if (!dream.trim()) {
-      setErrorMsg(t("index.errors.emptyDream"));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    if (!user) {
+      setErrorMsg(t("index.errors.noConnection"));
       return;
     }
-
-    let currentUser = user;
-    if (!currentUser) {
-      try {
-        const { auth } = require("../utils/firebaseConfig");
-        const { signInAnonymously } = require("firebase/auth");
-        const userCredential = await signInAnonymously(auth);
-        currentUser = userCredential.user;
-      } catch (err) {
-        setErrorMsg(t("index.errors.noConnection"));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        return;
-      }
+    const network = await NetInfo.fetch();
+    if (!network.isConnected) {
+      setErrorMsg("İnternet bağlantını kontrol et.");
+      return;
     }
 
     setIsLoading(true);
     setResult(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
     setIsCooldown(true);
-    setTimeout(() => setIsCooldown(false), 10000);
-
-    // Kredi Düşürme Mantığı (Bypass dahil)
-    const canProceed = await deductCredit();
-    if (!canProceed) {
-      setErrorMsg(t("index.errors.outOfEnergy"));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setIsLoading(false);
-      return;
-    }
-
-    const startTime = Date.now();
+    setTimeout(() => setIsCooldown(false), 10_000);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const startedAt = Date.now();
 
     try {
-      // Önceki Rüyayı Çekme (Dream Threading)
-      let previousDreamText = "";
-      try {
-        const historyRef = collection(db, "dream_history");
-        const q = query(historyRef, where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          previousDreamText = querySnapshot.docs[0].data().dreamInputText;
-        }
-      } catch (err) {
-        console.error("Geçmiş rüya çekilirken hata:", err);
-      }
+      const previousDream = await getPreviousDream(user.uid);
+      const analysis = await analyzeDreamApi(user, normalizedDream, previousDream);
+      setResult(analysis);
 
-      // Cloudflare Worker İsteği
-      abortControllerRef.current = new AbortController();
-      const timeoutId = setTimeout(() => {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      }, 15000); // 15 seconds timeout
-
-      let data;
-      try {
-        const response = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dream: dream, previousDream: previousDreamText }),
-          signal: abortControllerRef.current.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        const responseText = await response.text();
-        try {
-          data = JSON.parse(responseText);
-        } catch (jsonErr) {
-          throw new Error("Ruhsal alemden gelen mesaj anlaşılamadı. Lütfen tekrar dene.");
-        }
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Mistisizmde bir kırılma yaşandı.");
-        }
-      } catch (fetchErr: any) {
-        clearTimeout(timeoutId);
-        throw fetchErr;
-      }
-
-      setResult(data);
-
-      // Sonucu History Koleksiyonuna Kaydetme
       try {
         await addDoc(collection(db, "dream_history"), {
-          uid: currentUser.uid,
+          uid: user.uid,
           createdAt: new Date().toISOString(),
-          dreamInputText: dream,
+          dreamInputText: normalizedDream,
           aiAnalysis: {
-            interpretation: data.interpretation,
-            primaryEmotion: data.primaryEmotion,
-            moodScore: data.moodScore,
-            archetypes: data.archetypes,
+            interpretation: analysis.interpretation,
+            primaryEmotion: analysis.primaryEmotion,
+            moodScore: analysis.moodScore,
+            archetypes: analysis.archetypes,
           },
-          imageUrl: data.gorsel_url,
-          isThreaded: !!previousDreamText
+          imageUrl: analysis.gorsel_url ?? null,
+          requestId: analysis.requestId,
+          isThreaded: Boolean(previousDream),
         });
-      } catch (err) {
-        console.log("[Dream History Log]: Gelecek için saklandı.");
+      } catch (historyError) {
+        console.warn("[History] Analysis could not be saved", historyError);
       }
 
-    } catch (error: any) {
-      console.log("[Analyze Error Handled Gracefully]:", error.message || error.code);
-      let alertMsg = error.message || t("index.errors.fallback");
-      
-      if (error.name === "AbortError" || error.message?.includes("aborted")) {
-        alertMsg = "Ruhsal alemden yanıt alınamadı (Zaman aşımı). Lütfen tekrar dene.";
-      }
-
-      setErrorMsg(alertMsg);
-      Alert.alert(
-        "Ruhsal Bağlantı Sorunu",
-        alertMsg,
-        [{ text: "Tamam", style: "cancel" }]
-      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      const message = friendlyApiError(error);
+      setErrorMsg(message);
+      Alert.alert("Analiz tamamlanamadı", message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
-      const elapsedTime = Date.now() - startTime;
-      const minWait = 2500;
-
-      if (elapsedTime < minWait) {
-        await new Promise((resolve) => setTimeout(resolve, minWait - elapsedTime));
-      }
-
+      const remaining = 1800 - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
       setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
+  const reportResult = (reason: string) => {
+    if (!user || !result?.requestId) return;
+    reportAiContent(user, result.requestId, reason)
+      .then(() => Alert.alert("Teşekkürler", "Bildirimini aldık ve inceleme kuyruğuna ekledik."))
+      .catch(() => Alert.alert("Bildirim gönderilemedi", "Bağlantını kontrol edip tekrar dene."));
+  };
+
+  const openReportMenu = () => {
+    Alert.alert("AI çıktısını bildir", "Bu çıktıda ne sorun var?", [
+      { text: "Uygunsuz / saldırgan", onPress: () => reportResult("offensive") },
+      { text: "Tehlikeli yönlendirme", onPress: () => reportResult("unsafe") },
+      { text: "Yanıltıcı içerik", onPress: () => reportResult("misleading") },
+      { text: "Vazgeç", style: "cancel" },
+    ]);
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[styles.container, { backgroundColor: "#120a1f" }]}
-    >
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
       <MysticLoader visible={isLoading || isWatchingAd} />
       <StatusBar barStyle="light-content" />
-      
-      {/* HEADER: Profile Icon */}
-      <View style={styles.headerBar}>
-        <TouchableOpacity 
-          style={styles.profileButton} 
-          onPress={() => {
-            if (user && !user.isAnonymous) {
-              router.push('/profile');
-            } else {
-              router.push('/auth');
-            }
-          }}
-        >
-          <Ionicons name="person-circle-outline" size={36} color="#e8dcf8" />
-          {isAnonymous && <View style={styles.notificationDot} />}
-        </TouchableOpacity>
-      </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
+      <TouchableOpacity
+        accessibilityLabel="Profil"
+        accessibilityRole="button"
+        style={styles.profileButton}
+        onPress={() => router.push(user && !user.isAnonymous ? "/profile" : "/auth")}
       >
+        <Ionicons name="person-circle-outline" size={38} color="#e8dcf8" />
+        {isAnonymous && <View style={styles.notificationDot} />}
+      </TouchableOpacity>
+
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <Text style={styles.headerTitle}>🔮 Omen</Text>
-        <Text style={styles.subtitle}>
-          Bilinçaltının derinliklerine yolculuk...
-        </Text>
+        <Text style={styles.subtitle}>Bilinçaltının derinliklerine yolculuk…</Text>
+
+        <View style={styles.noticeCard}>
+          <Ionicons name="information-circle-outline" size={18} color="#c084fc" />
+          <Text style={styles.noticeText}>
+            AI yorumları eğlence ve kişisel farkındalık içindir; tıbbi tanı veya kesin kehanet değildir.
+          </Text>
+        </View>
 
         <View style={styles.inputContainer}>
           <TextInput
+            accessibilityLabel="Rüya anlatımı"
             style={styles.input}
-            placeholder="Ne gördün? Anlat bakalım..."
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholder="Ne gördün? Rüyanı anlat…"
+            placeholderTextColor="rgba(255,255,255,0.35)"
             multiline
-            numberOfLines={4}
+            maxLength={3000}
             value={dream}
             onChangeText={(text) => {
               setDream(text);
-              if (errorMsg) setErrorMsg('');
+              if (errorMsg) setErrorMsg("");
             }}
           />
+          <Text style={styles.counter}>{dream.length}/3000</Text>
         </View>
 
-        {errorMsg ? (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={16} color="#ff4081" style={{ marginRight: 6 }} />
-            <Text style={styles.errorText}>{errorMsg}</Text>
+        {errorMsg || adMessage ? (
+          <View style={styles.messageContainer}>
+            <Ionicons name="alert-circle" size={16} color="#ff7096" />
+            <Text style={styles.messageText}>{errorMsg || adMessage}</Text>
           </View>
         ) : null}
 
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isLoading && styles.buttonDisabled,
-            ]}
-            onPress={analyzeDream}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#120a1f" size="small" />
-            ) : (
-              <Text style={styles.buttonText}>Kehaneti Al ✨</Text>
-            )}
-          </TouchableOpacity>
-          
-          <EnergyBar 
-            credits={credits} 
-            currentAdProgress={currentAdProgress}
-            requiredAds={requiredAds}
-            isDeveloper={isDeveloper} 
-          />
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={analyzeDream}
+          disabled={isLoading}
+        >
+          {isLoading ? <ActivityIndicator color="#120a1f" /> : <Text style={styles.buttonText}>Kehaneti Al ✨</Text>}
+        </TouchableOpacity>
 
-          {credits === 0 && !isDeveloper && (
-            <View style={styles.outOfEnergyContainer}>
-              {isAnonymous ? (
-                <View style={styles.guestPremiumBox}>
-                  <Text style={styles.guestPremiumText}>
-                    Misafirlerin enerji depolama yeteneği kısıtlıdır. Hesabını bağla ve her gün ücretsiz enerji kazan!
-                  </Text>
-                  <TouchableOpacity 
-                    style={styles.premiumButton}
-                    onPress={() => router.push('/auth')}
-                  >
-                    <Text style={styles.premiumButtonText}>Kayıt Ol & Enerji Kazan</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity onPress={showAdToEarnCredit} style={{marginTop: 10}}>
-                   <Text style={[styles.quotaText, { color: '#03dac6', textDecorationLine: 'underline' }]}>
-                     Gölgeyle Yüzleş (Enerji Topla)
-                   </Text>
+        <EnergyBar
+          credits={credits}
+          currentAdProgress={currentAdProgress}
+          requiredAds={requiredAds}
+          isDeveloper={isDeveloper}
+        />
+
+        {credits === 0 && !isDeveloper && (
+          <View style={styles.outOfEnergyContainer}>
+            {isAnonymous ? (
+              <View style={styles.guestBox}>
+                <Text style={styles.guestText}>Hesabını bağla; geçmişini koru ve günlük ücretsiz enerji kazan.</Text>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push("/auth")}>
+                  <Text style={styles.secondaryButtonText}>Hesabını Bağla</Text>
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={showAdToEarnCredit} disabled={!isAdLoaded}>
+                <Text style={[styles.rewardLink, !isAdLoaded && styles.linkDisabled]}>
+                  {isAdLoaded ? "Ödüllü Reklam İzle (Enerji Topla)" : "Reklam hazırlanıyor…"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
-        {result && <DreamResultCard result={result} />}
+        {result && <DreamResultCard result={result} onReport={openReportMenu} />}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 24,
-    justifyContent: "flex-start",
-    paddingTop: 60,
-  },
-  headerTitle: {
-    fontSize: 36,
-    fontWeight: "900",
-    color: "#e8dcf8",
-    textAlign: "center",
-    letterSpacing: 2,
-    textShadowColor: "rgba(108, 46, 156, 0.8)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(232, 220, 248, 0.6)",
-    textAlign: "center",
-    marginBottom: 30,
-    fontStyle: "italic",
-  },
-  inputContainer: {
-    backgroundColor: "rgba(0,0,0,0.3)",
-    borderRadius: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "rgba(108, 46, 156, 0.3)",
-  },
-  input: {
-    color: "#fff",
-    fontSize: 18,
-    padding: 20,
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 64, 129, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 64, 129, 0.3)',
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#ff4081',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    flex: 1,
-  },
-  button: {
-    backgroundColor: "#e8dcf8",
-    paddingVertical: 18,
-    borderRadius: 50,
-    alignItems: "center",
-    shadowColor: "#6c2e9c",
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  buttonDisabled: { opacity: 0.5 },
+  container: { flex: 1, backgroundColor: "#120a1f" },
+  scrollContainer: { flexGrow: 1, padding: 24, paddingTop: 62, paddingBottom: 48 },
+  profileButton: { position: "absolute", top: 48, right: 24, zIndex: 10 },
+  notificationDot: { position: "absolute", top: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: "#ff0055", borderWidth: 2, borderColor: "#120a1f" },
+  headerTitle: { fontSize: 36, fontWeight: "900", color: "#e8dcf8", textAlign: "center", letterSpacing: 2, textShadowColor: "rgba(108,46,156,.8)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10 },
+  subtitle: { fontSize: 14, color: "rgba(232,220,248,.65)", textAlign: "center", marginBottom: 20, fontStyle: "italic" },
+  noticeCard: { flexDirection: "row", gap: 8, backgroundColor: "rgba(192,132,252,.08)", borderColor: "rgba(192,132,252,.25)", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16 },
+  noticeText: { flex: 1, color: "rgba(232,220,248,.75)", fontSize: 12, lineHeight: 17 },
+  inputContainer: { backgroundColor: "rgba(0,0,0,.3)", borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: "rgba(108,46,156,.4)" },
+  input: { color: "#fff", fontSize: 17, padding: 20, paddingBottom: 32, minHeight: 130, textAlignVertical: "top" },
+  counter: { position: "absolute", right: 14, bottom: 10, color: "rgba(255,255,255,.35)", fontSize: 11 },
+  messageContainer: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "rgba(255,64,129,.1)", padding: 12, borderRadius: 9, borderWidth: 1, borderColor: "rgba(255,64,129,.3)", marginBottom: 16 },
+  messageText: { color: "#ff8aaa", fontSize: 13, fontWeight: "600", flex: 1 },
+  button: { backgroundColor: "#e8dcf8", paddingVertical: 18, borderRadius: 50, alignItems: "center", elevation: 8 },
+  buttonDisabled: { opacity: 0.55 },
   buttonText: { color: "#120a1f", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
-  buttonContainer: {
-    marginBottom: 10,
-  },
-  quotaText: {
-    color: "rgba(255,255,255,0.5)",
-    textAlign: "center",
-    marginTop: 15,
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  headerBar: {
-    position: 'absolute',
-    top: 55, 
-    right: 25,
-    zIndex: 10,
-  },
-  profileButton: {
-    position: 'relative',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 0,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#ff0055',
-    borderWidth: 2,
-    borderColor: '#120a1f',
-    shadowColor: '#ff0055',
-    shadowOpacity: 0.8,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 5,
-  },
-  outOfEnergyContainer: {
-    marginTop: 15,
-    alignItems: 'center',
-  },
-  guestPremiumBox: {
-    backgroundColor: 'rgba(108, 46, 156, 0.15)',
-    padding: 18,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(108, 46, 156, 0.5)',
-    alignItems: 'center',
-    width: '100%',
-  },
-  guestPremiumText: {
-    color: '#e8dcf8',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  premiumButton: {
-    backgroundColor: '#6c2e9c',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    shadowColor: '#6c2e9c',
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
-  premiumButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
+  outOfEnergyContainer: { marginTop: 8, alignItems: "center" },
+  guestBox: { backgroundColor: "rgba(108,46,156,.15)", padding: 18, borderRadius: 15, borderWidth: 1, borderColor: "rgba(108,46,156,.5)", alignItems: "center", width: "100%" },
+  guestText: { color: "#e8dcf8", fontSize: 13, textAlign: "center", marginBottom: 12, lineHeight: 18 },
+  secondaryButton: { backgroundColor: "#6c2e9c", paddingVertical: 12, paddingHorizontal: 25, borderRadius: 25 },
+  secondaryButtonText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
+  rewardLink: { color: "#03dac6", textDecorationLine: "underline", fontWeight: "700", padding: 10 },
+  linkDisabled: { opacity: 0.45, textDecorationLine: "none" },
 });

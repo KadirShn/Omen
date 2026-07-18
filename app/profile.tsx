@@ -1,203 +1,122 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  Alert,
-  StatusBar,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
-import { useCredits } from '../hooks/useCredits';
-import { useRouter } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { Href, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { ActivityIndicator, Alert, Linking, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useAds } from "../context/AdsContext";
+import { useAuth } from "../context/AuthContext";
+import { useCredits } from "../hooks/useCredits";
+import { deleteAccountAndData, legalUrls } from "../utils/api";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { credits } = useCredits();
+  const { showPrivacyOptions } = useAds();
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleLogout = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert("Gerçekliğe Dön", "Mistik alemden ayrılmak istediğine emin misin?", [
+    Alert.alert("Çıkış Yap", "Hesabından çıkmak istediğine emin misin?", [
       { text: "Vazgeç", style: "cancel" },
-      { 
-        text: "Çıkış Yap", 
-        style: "destructive", 
-        onPress: async () => {
-          await logout();
-          router.replace('/');
-        }
-      }
+      { text: "Çıkış Yap", style: "destructive", onPress: async () => {
+        await logout();
+        router.replace("/");
+      } },
     ]);
+  };
+
+  const deleteAccount = async () => {
+    if (!user || user.isAnonymous) return;
+    setIsDeleting(true);
+    try {
+      await deleteAccountAndData(user);
+      await logout();
+      Alert.alert("Hesap silindi", "Hesabın ve rüya geçmişin kalıcı olarak silindi.");
+      router.replace("/");
+    } catch {
+      Alert.alert("Silme tamamlanamadı", "Bağlantını kontrol edip tekrar dene. Sorun sürerse web silme sayfasını kullanabilirsin.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmDeletion = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      "Hesabı ve tüm verileri sil",
+      "Bu işlem hesabını, profilini ve tüm rüya geçmişini kalıcı olarak siler. Geri alınamaz.",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Devam Et", style: "destructive", onPress: () => {
+          Alert.alert("Son onay", "Tüm verilerinin kalıcı olarak silinmesini onaylıyor musun?", [
+            { text: "Vazgeç", style: "cancel" },
+            { text: "Kalıcı Olarak Sil", style: "destructive", onPress: deleteAccount },
+          ]);
+        } },
+      ],
+    );
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
-      {/* Cinematic Deep Violet to Pure Black Gradient */}
-      <LinearGradient
-        colors={['#1a0b2e', '#0d0417', '#000000']}
-        style={StyleSheet.absoluteFill}
-      />
-      
-      {/* Subtle Mist/Glow Overlay */}
-      <LinearGradient
-        colors={['rgba(192, 132, 252, 0.05)', 'transparent']}
-        style={styles.mistOverlay}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-
-      {/* Integrated Back Navigation */}
-      <TouchableOpacity 
-        style={styles.backButton} 
-        onPress={() => router.back()}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Ionicons name="arrow-back" size={28} color="#c084fc" />
+      <LinearGradient colors={["#1a0b2e", "#0d0417", "#000"]} style={StyleSheet.absoluteFill} />
+      <TouchableOpacity accessibilityLabel="Geri" style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={27} color="#c084fc" />
       </TouchableOpacity>
 
-      <View style={styles.content}>
-        <Ionicons name="person-circle" size={100} color="#e8dcf8" style={styles.profileIcon} />
+      <ScrollView contentContainerStyle={styles.content}>
+        <Ionicons name="person-circle" size={88} color="#e8dcf8" />
         <Text style={styles.title}>Rüya Gözcüsü</Text>
-        <View style={styles.glowUnderline} />
         <Text style={styles.email}>{user?.email}</Text>
 
         <View style={styles.statsCard}>
           <Text style={styles.statsLabel}>MİSTİK ENERJİ</Text>
-          <Text style={styles.statsValue}>{credits} ✨</Text>
+          <Text style={styles.statsValue}>{credits ?? "…"} ✨</Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.logoutButton} 
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={['rgba(255, 0, 85, 0.15)', 'rgba(255, 0, 85, 0.05)']}
-            style={styles.logoutGradient}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#ff0055" style={{marginRight: 8}} />
-            <Text style={styles.logoutText}>Çıkış Yap</Text>
-          </LinearGradient>
+        <MenuButton icon="book-outline" label="Rüya Geçmişim" onPress={() => router.push("/history" as Href)} />
+        <MenuButton icon="shield-checkmark-outline" label="Gizlilik Politikası" onPress={() => Linking.openURL(legalUrls.privacy)} />
+        <MenuButton icon="options-outline" label="Reklam Gizlilik Seçenekleri" onPress={() => showPrivacyOptions().catch(() => Alert.alert("Bilgi", "Bu bölgede ek reklam gizlilik seçeneği gerekmiyor."))} />
+        <MenuButton icon="log-out-outline" label="Çıkış Yap" onPress={handleLogout} />
+
+        <TouchableOpacity style={styles.deleteButton} onPress={confirmDeletion} disabled={isDeleting}>
+          {isDeleting ? <ActivityIndicator color="#ff4d7d" /> : <>
+            <Ionicons name="trash-outline" size={20} color="#ff4d7d" />
+            <Text style={styles.deleteText}>Hesabımı ve Verilerimi Sil</Text>
+          </>}
         </TouchableOpacity>
-      </View>
+        <TouchableOpacity onPress={() => Linking.openURL(legalUrls.deletion)}>
+          <Text style={styles.webDelete}>Web üzerinden silme talebi</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }
 
+function MenuButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity accessibilityRole="button" style={styles.menuButton} onPress={onPress}>
+      <Ionicons name={icon} size={21} color="#c084fc" />
+      <Text style={styles.menuText}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,.35)" />
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  mistOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    left: 24,
-    zIndex: 50,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: 'rgba(26, 11, 46, 0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(192, 132, 252, 0.3)',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    zIndex: 10,
-  },
-  profileIcon: {
-    marginBottom: 10,
-    textShadowColor: 'rgba(192, 132, 252, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    color: '#fff',
-    letterSpacing: 4,
-    textShadowColor: 'rgba(192, 132, 252, 0.8)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 15,
-  },
-  glowUnderline: {
-    width: 60,
-    height: 2,
-    backgroundColor: '#c084fc',
-    marginTop: 12,
-    marginBottom: 20,
-    shadowColor: '#c084fc',
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 5,
-  },
-  email: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.6)',
-    letterSpacing: 1,
-    marginBottom: 40,
-  },
-  statsCard: {
-    backgroundColor: 'rgba(20, 10, 30, 0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(192, 132, 252, 0.4)',
-    borderRadius: 20,
-    paddingVertical: 25,
-    paddingHorizontal: 50,
-    alignItems: 'center',
-    marginBottom: 40,
-    shadowColor: '#c084fc',
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  statsLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 12,
-    letterSpacing: 3,
-    marginBottom: 10,
-  },
-  statsValue: {
-    color: '#c084fc',
-    fontSize: 42,
-    fontWeight: '900',
-    textShadowColor: 'rgba(192, 132, 252, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  logoutButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 85, 0.4)',
-    width: '100%',
-  },
-  logoutGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-  },
-  logoutText: {
-    color: '#ff0055',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1.5,
-  },
+  container: { flex: 1, backgroundColor: "#000" },
+  backButton: { position: "absolute", top: 42, left: 22, zIndex: 10, width: 42, height: 42, justifyContent: "center", alignItems: "center", borderRadius: 21, backgroundColor: "rgba(26,11,46,.75)", borderWidth: 1, borderColor: "rgba(192,132,252,.3)" },
+  content: { alignItems: "center", paddingHorizontal: 28, paddingTop: 105, paddingBottom: 50 },
+  title: { fontSize: 29, fontFamily: "serif", color: "#fff", letterSpacing: 3, marginTop: 6 },
+  email: { fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 8, marginBottom: 24 },
+  statsCard: { width: "100%", backgroundColor: "rgba(20,10,30,.75)", borderWidth: 1, borderColor: "rgba(192,132,252,.35)", borderRadius: 18, paddingVertical: 18, alignItems: "center", marginBottom: 22 },
+  statsLabel: { color: "rgba(255,255,255,.5)", fontSize: 11, letterSpacing: 3 },
+  statsValue: { color: "#c084fc", fontSize: 34, fontWeight: "900", marginTop: 7 },
+  menuButton: { width: "100%", minHeight: 54, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 17, marginBottom: 10, borderRadius: 14, backgroundColor: "rgba(26,11,46,.65)", borderWidth: 1, borderColor: "rgba(192,132,252,.2)" },
+  menuText: { flex: 1, color: "#eee", fontSize: 15, fontWeight: "600" },
+  deleteButton: { width: "100%", minHeight: 54, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9, marginTop: 18, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,0,85,.45)", backgroundColor: "rgba(255,0,85,.08)" },
+  deleteText: { color: "#ff4d7d", fontWeight: "700" },
+  webDelete: { color: "rgba(255,255,255,.5)", textDecorationLine: "underline", padding: 16, fontSize: 12 },
 });

@@ -1,228 +1,108 @@
-import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, updateDoc, increment, getDoc } from 'firebase/firestore';
-import { db } from '../utils/firebaseConfig';
-import { useAuth } from '../context/AuthContext';
-import { useRewardedAd } from 'react-native-google-mobile-ads';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { useRewardedAd } from "react-native-google-mobile-ads";
+import { db } from "../utils/firebaseConfig";
+import { useAuth } from "../context/AuthContext";
+import { useAds } from "../context/AdsContext";
+import { claimAdReward, claimDailyCredit } from "../utils/api";
 
-const adUnitId = __DEV__ 
-  ? 'ca-app-pub-3940256099942544/5224354917' 
-  : 'ca-app-pub-9093667472808260/8819666043';
+const adUnitId = __DEV__
+  ? "ca-app-pub-3940256099942544/5224354917"
+  : "ca-app-pub-9093667472808260/8819666043";
 
 export const useCredits = () => {
   const { user } = useAuth();
+  const { isAdsReady } = useAds();
   const [credits, setCredits] = useState<number | null>(null);
-  
-  // Progressive Fatigue States
-  const [currentAdProgress, setCurrentAdProgress] = useState<number>(0);
-  const [dailyCreditsEarned, setDailyCreditsEarned] = useState<number>(0);
-  
+  const [currentAdProgress, setCurrentAdProgress] = useState(0);
+  const [dailyCreditsEarned, setDailyCreditsEarned] = useState(0);
   const [isDeveloper, setIsDeveloper] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
+  const [adMessage, setAdMessage] = useState<string | null>(null);
+  const rewardHandled = useRef(false);
 
-  // The dynamic formula
+  const requestOptions = useMemo(
+    () => ({
+      keywords: ["dream", "wellness", "journaling"],
+      serverSideVerificationOptions: user
+        ? { userId: user.uid, customData: "omen-energy" }
+        : undefined,
+    }),
+    [user],
+  );
+
+  const { isLoaded, isClosed, isEarnedReward, load, show, error } = useRewardedAd(
+    adUnitId,
+    requestOptions,
+  );
+
   const requiredAds = 2 + dailyCreditsEarned;
 
-  const { isLoaded, isClosed, isEarnedReward, load, show, error } = useRewardedAd(adUnitId, {
-    keywords: ['dream', 'spirituality', 'psychology']
-  });
-
-  const [rewardGrantedForCurrentAd, setRewardGrantedForCurrentAd] = useState(false);
-  const [adErrorOccurred, setAdErrorOccurred] = useState(false);
-
-  useEffect(() => {
-    if (error) {
-      console.log("[useCredits]: Ad error occurred:", error);
-      setAdErrorOccurred(true);
-    }
-  }, [error]);
-
-  const grantEnergyFallback = useCallback(async () => {
-    if (!user) return;
-    console.log("[AdMob Fallback]: Bypassing ad, granting Mystic Energy directly.");
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        credits: increment(1)
-      });
-    } catch (err) {
-      console.log("[AdMob Fallback]: Failed to grant energy", err);
-    }
-  }, [user]);
-
-  const grantReward = useCallback(async () => {
-    try {
-      if (!user) return;
-      const userRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(userRef);
-      
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const currentProgress = data.currentAdProgress ?? 0;
-        const currentDailyEarned = data.dailyCreditsEarned ?? 0;
-        
-        const currentReqAds = 2 + currentDailyEarned;
-        const newProgress = currentProgress + 1;
-        
-        if (newProgress >= currentReqAds) {
-           await updateDoc(userRef, {
-             credits: increment(1),
-             currentAdProgress: 0,
-             dailyCreditsEarned: increment(1)
-           });
-        } else {
-           await updateDoc(userRef, {
-             currentAdProgress: newProgress
-           });
-        }
-      }
-    } catch (error) {
-      console.log("[useCredits]: Failed to process ad reward", error);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (isClosed) {
-      setIsWatchingAd(false);
-      setRewardGrantedForCurrentAd(false);
-      load();
-    }
-  }, [isClosed, load]);
-
-  useEffect(() => {
-    if (isEarnedReward && !rewardGrantedForCurrentAd && user) {
-      setRewardGrantedForCurrentAd(true);
-      grantReward();
-    }
-  }, [isEarnedReward, rewardGrantedForCurrentAd, user, grantReward]);
-
   useEffect(() => {
     if (!user) return;
-
-    const userRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(userRef, async (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setCredits(data.credits ?? 0);
-        setCurrentAdProgress(data.currentAdProgress ?? 0);
-        setDailyCreditsEarned(data.dailyCreditsEarned ?? 0);
-        setIsDeveloper(data.isDeveloper ?? false);
-        
-        // --- Daily Passive Energy & Reset Logic ---
-        const lastDailyRewardTimestamp = data.lastDailyRewardTimestamp;
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-
-        if (lastDailyRewardTimestamp !== todayStr) {
-          if (user.isAnonymous) {
-            // Guests do not receive the daily check-in reward.
-            // But we can reset their daily watch-ad fatigue just in case.
-            try {
-              await updateDoc(userRef, {
-                lastDailyRewardTimestamp: todayStr,
-                dailyCreditsEarned: 0,
-                currentAdProgress: 0
-              });
-            } catch (e) {}
-            return;
-          }
-
-          const currentCredits = data.credits ?? 0;
-          const MAX_FREE_CREDITS = 5;
-
-          if (currentCredits < MAX_FREE_CREDITS) {
-            try {
-              await updateDoc(userRef, {
-                credits: increment(1),
-                lastDailyRewardTimestamp: todayStr,
-                dailyCreditsEarned: 0,
-                currentAdProgress: 0
-              });
-              console.log("Granted daily +1 energy and reset fatigue!");
-            } catch (e) {
-              console.log("[useCredits]: Failed to grant daily reward/reset", e);
-            }
-          } else {
-            // User reached cap. Reset fatigue but do not add credit.
-            try {
-              await updateDoc(userRef, {
-                lastDailyRewardTimestamp: todayStr,
-                dailyCreditsEarned: 0,
-                currentAdProgress: 0
-              });
-              console.log("Cap reached. Reset fatigue but no credits added.");
-            } catch (e) {
-              console.log("[useCredits]: Failed to reset fatigue", e);
-            }
-          }
-        }
-      }
+    claimDailyCredit(user).catch((requestError) => {
+      console.warn("[Credits] Daily sync failed", requestError);
     });
 
-    return () => unsubscribe();
+    const unsubscribe = onSnapshot(doc(db, "users", user.uid), (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      setCredits(Number(data.credits ?? 0));
+      setCurrentAdProgress(Number(data.currentAdProgress ?? 0));
+      setDailyCreditsEarned(Number(data.dailyCreditsEarned ?? 0));
+      setIsDeveloper(data.isDeveloper === true);
+    });
+    return unsubscribe;
   }, [user]);
 
-  const deductCredit = useCallback(async (): Promise<boolean> => {
-    // 1. The Developer Bypass
-    if (isDeveloper) return true;
-    
-    // 2. Not enough credits
-    if (credits === null || credits <= 0) {
-      // AdMob Fallback: If ad failed to load/show, bypass and grant energy automatically
-      if (adErrorOccurred || error) {
-        console.log("[AdMob Fallback]: Ad blocked or failed. Bypassing and granting energy.");
-        await grantEnergyFallback();
-        return true; // Proceed directly!
-      }
-      return false;
-    }
+  useEffect(() => {
+    if (isAdsReady) load();
+  }, [isAdsReady, load]);
 
-    try {
-      if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          credits: increment(-1)
-        });
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.log("[useCredits]: Failed to deduct credit", error);
-      return false;
-    }
-  }, [credits, isDeveloper, user]);
+  useEffect(() => {
+    if (!error) return;
+    setIsWatchingAd(false);
+    setAdMessage("Reklam şu anda yüklenemedi. Lütfen biraz sonra tekrar dene.");
+  }, [error]);
 
-  const showAdToEarnCredit = useCallback(async () => {
-    if (isLoaded) {
-      setIsWatchingAd(true);
-      try {
-        show();
-      } catch (err) {
-        console.log("Failed to show ad:", err);
-        setIsWatchingAd(false);
-        await grantEnergyFallback();
-      }
+  useEffect(() => {
+    if (!isClosed) return;
+    setIsWatchingAd(false);
+    rewardHandled.current = false;
+    if (isAdsReady) load();
+  }, [isClosed, isAdsReady, load]);
+
+  useEffect(() => {
+    if (!isEarnedReward || !user || rewardHandled.current) return;
+    rewardHandled.current = true;
+    if (__DEV__) {
+      claimAdReward(user)
+        .then(() => setAdMessage("Test reklamı ilerlemesi kaydedildi."))
+        .catch(() => setAdMessage("Test ödülü doğrulanamadı."));
     } else {
-      console.log("Ad not loaded yet.");
-      if (adErrorOccurred || error) {
-        await grantEnergyFallback();
-      } else {
-        load();
-      }
+      setAdMessage("Ödülün güvenli biçimde doğrulanıyor…");
     }
-  }, [isLoaded, show, load, adErrorOccurred, error, grantEnergyFallback]);
+  }, [isEarnedReward, user]);
+
+  const showAdToEarnCredit = useCallback(() => {
+    setAdMessage(null);
+    if (!isAdsReady || !isLoaded) {
+      setAdMessage("Reklam hazırlanıyor. Birkaç saniye sonra tekrar dene.");
+      if (isAdsReady) load();
+      return;
+    }
+    setIsWatchingAd(true);
+    show();
+  }, [isAdsReady, isLoaded, load, show]);
 
   return {
     credits,
     currentAdProgress,
     requiredAds,
     isDeveloper,
-    deductCredit,
     showAdToEarnCredit,
-    isAdLoaded: isLoaded,
+    isAdLoaded: isAdsReady && isLoaded,
     isWatchingAd,
+    adMessage,
   };
 };

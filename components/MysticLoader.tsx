@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -9,8 +9,6 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-const { width, height } = Dimensions.get('window');
 
 const MYSTIC_PHRASES = [
   "Yıldızlara danışılıyor...",
@@ -62,7 +60,7 @@ export const MysticLoader: React.FC<MysticLoaderProps> = ({ visible }) => {
         pulse.value = 1;
       };
     }
-  }, [visible]);
+  }, [pulse, rotation, visible]);
 
   const animatedCircleStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],

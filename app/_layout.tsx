@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../utils/i18n";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { AdsProvider } from "../context/AdsContext";
 
 function RootLayoutNav() {
   const { isAuthReady } = useAuth();
@@ -20,15 +21,18 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="profile" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="history" options={{ headerShown: false, animation: 'fade' }} />
     </Stack>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <AdsProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </AdsProvider>
   );
 }
 

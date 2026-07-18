@@ -1,8 +1,10 @@
 name = "omen-proxy"
 main = "src/index.ts"
-compatibility_date = "2024-05-07"
+compatibility_date = "2026-07-16"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+GEMINI_MODEL = "gemini-2.5-flash"
+SUPPORT_EMAIL = "kadselbur1@gmail.com"
 # API anahtarları buraya DEĞİL, Cloudflare dashboard üzerinden Secret olarak eklenecek!
 # Kural 1'i ihlal etmemek adına gizli tutulacak.

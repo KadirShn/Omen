@@ -2,30 +2,33 @@
   "auth": {
     "title": "OMEN",
     "subtitleLogin": "Return to the dream realm.",
-    "subtitleSignup": "Sign up, claim daily energy, and preserve your dream history eternally.",
+    "subtitleSignup": "Sign up, claim daily energy, and protect your dream history.",
     "emailPlaceholder": "Email",
     "passwordPlaceholder": "Password",
     "loginBtn": "Log In",
-    "signupLinkBtn": "Sign Up & Link",
+    "signupLinkBtn": "Sign Up and Link",
     "switchSignup": "No account? Sign Up",
     "switchLogin": "Already have an account? Log In",
+    "forgotPassword": "Forgot password",
+    "enterEmailForReset": "Enter your email to reset your password.",
+    "resetEmailSent": "A password reset link was sent to your email.",
     "missingInfo": "Please fill in all fields.",
-    "successSignup": "Account permanently secured and dream history preserved!",
+    "successSignup": "Your account is secured and your dream history is protected.",
     "errors": {
       "invalid-email": "Invalid email format.",
       "invalid-credential": "Incorrect email or password.",
       "email-already-in-use": "This email is already in use.",
-      "weak-password": "Password is too weak (min 6 characters).",
-      "network-request-failed": "Network error. Cannot reach the realm.",
-      "fallback": "A disturbance in the mystic network."
+      "weak-password": "Password is too weak (minimum 6 characters).",
+      "network-request-failed": "Network error.",
+      "fallback": "Something went wrong. Please try again."
     }
   },
   "index": {
     "errors": {
-      "emptyDream": "Whisper your dream first, bro!",
-      "noConnection": "Mystic bond could not be established, please wait...",
-      "outOfEnergy": "Your soul energy is depleted. Face the shadow to gather more.",
-      "fallback": "A disturbance in the mystic network. Please try again."
+      "emptyDream": "Tell us your dream first.",
+      "noConnection": "Your session could not be prepared.",
+      "outOfEnergy": "You are out of energy. Watch a rewarded ad to earn more.",
+      "fallback": "The analysis could not be completed. Please try again."
     }
   }
 }

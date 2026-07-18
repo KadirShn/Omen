@@ -1,18 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { auth, db } from "../utils/firebaseConfig";
+import { auth } from "../utils/firebaseConfig";
 import { 
   signInAnonymously, 
   onAuthStateChanged, 
   User, 
   signOut
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 interface AuthContextData {
   user: User | null;
   loading: boolean;
   isAuthReady: boolean;
-  isDeveloper: boolean;
   isAnonymous: boolean;
   logout: () => Promise<void>;
 }
@@ -21,7 +19,6 @@ const AuthContext = createContext<AuthContextData>({
   user: null,
   loading: true,
   isAuthReady: false,
-  isDeveloper: false,
   isAnonymous: true,
   logout: async () => {},
 });
@@ -30,39 +27,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isDeveloper, setIsDeveloper] = useState(false);
 
   useEffect(() => {
-    // Listen to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
-        
-        try {
-          // Check or create user document in Firestore
-          const userRef = doc(db, "users", firebaseUser.uid);
-          const userDoc = await getDoc(userRef);
-          
-          if (!userDoc.exists()) {
-            // Guest gets 2 welcome credits, Permanent user gets 5
-            const initialCredits = firebaseUser.isAnonymous ? 2 : 5;
-            await setDoc(userRef, {
-              createdAt: new Date().toISOString(),
-              credits: initialCredits,
-              isDeveloper: false,
-            });
-            setIsDeveloper(false);
-          } else {
-            setIsDeveloper(userDoc.data().isDeveloper || false);
-          }
-        } catch (error) {
-          console.error("Firestore read/write error:", error);
-        }
+        setLoading(false);
+        setIsAuthReady(true);
+        return;
       } else {
         setUser(null);
-        // Automatic Guest Mode
         try {
           await signInAnonymously(auth);
+          // onAuthStateChanged will run again with the anonymous user. The
+          // Worker initializes the profile and credits; the client never owns
+          // economy writes.
+          return;
         } catch (error) {
           console.error("Anonymous login failed:", error);
         }
@@ -89,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user, 
         loading, 
         isAuthReady,
-        isDeveloper, 
         isAnonymous: user?.isAnonymous ?? true,
         logout
       }}

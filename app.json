@@ -3,6 +3,9 @@
     "name": "Omen",
     "slug": "Omen",
     "version": "1.0.0",
+    "platforms": [
+      "android"
+    ],
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "omen",
@@ -13,21 +16,23 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e",
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundImage": "./assets/images/icon.png",
-        "monochromeImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.kadirshn.omen",
-      "versionCode": 3,
+      "package": "com.kadirshn.omenn",
+      "versionCode": 1,
       "backgroundColor": "#000000",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "output": "static",
@@ -47,7 +52,15 @@
           }
         }
       ],
-      "react-native-google-mobile-ads",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9093667472808260~1160438960",
+          "delayAppMeasurementInit": true,
+          "optimizeInitialization": true,
+          "optimizeAdLoading": true
+        }
+      ],
       "expo-localization"
     ],
     "experiments": {
@@ -60,9 +73,5 @@
         "projectId": "077a6cd5-2246-433c-ad9d-fb7541246256"
       }
     }
-  },
-  "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-9093667472808260~1160438960",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458041367"
   }
 }
