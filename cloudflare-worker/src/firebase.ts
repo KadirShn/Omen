@@ -25,6 +25,7 @@ type FirestoreValue =
 export interface AuthenticatedUser {
   uid: string;
   email?: string;
+  emailVerified: boolean;
   isAnonymous: boolean;
   idToken: string;
 }
@@ -240,7 +241,7 @@ export async function queryDocuments(
     }),
   });
   if (!response.ok) throw new Error("Firestore query failed");
-  const rows = (await response.json()) as Array<{ document?: FirestoreDocument }>;
+  const rows = (await response.json()) as { document?: FirestoreDocument }[];
   return rows
     .map((row) => row.document?.name?.split("/documents/")[1])
     .filter((path): path is string => Boolean(path));
@@ -263,13 +264,14 @@ export async function authenticateRequest(
   );
   if (!response.ok) throw new Error("UNAUTHORIZED");
   const payload = (await response.json()) as {
-    users?: Array<{ localId: string; email?: string }>;
+    users?: { localId: string; email?: string; emailVerified?: boolean }[];
   };
   const user = payload.users?.[0];
   if (!user) throw new Error("UNAUTHORIZED");
   return {
     uid: user.localId,
     email: user.email,
+    emailVerified: user.emailVerified === true,
     isAnonymous: !user.email,
     idToken,
   };

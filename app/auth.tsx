@@ -19,6 +19,7 @@ import {
   signInWithEmailAndPassword,
   linkWithCredential,
   EmailAuthProvider,
+  reload,
   sendEmailVerification,
   sendPasswordResetEmail,
 } from 'firebase/auth';
@@ -27,7 +28,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 export default function AuthScreen() {
-  const { user, isAnonymous } = useAuth();
+  const { user, isAnonymous, logout } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -36,6 +37,10 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState(
+    user && !user.isAnonymous && !user.emailVerified ? user.email ?? '' : '',
+  );
+  const [verificationMessage, setVerificationMessage] = useState('');
 
   const toggleMode = () => {
     Haptics.selectionAsync();
@@ -76,22 +81,26 @@ export default function AuthScreen() {
 
     try {
       if (isLoginMode) {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        if (!credential.user.emailVerified) {
+          setVerificationEmail(credential.user.email ?? email.trim());
+          setVerificationMessage(t('auth.verificationRequired'));
+          return;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace('/');
       } else {
+        let account;
         if (isAnonymous && user) {
           const credential = EmailAuthProvider.credential(email.trim(), password);
-          const linked = await linkWithCredential(user, credential);
-          await sendEmailVerification(linked.user);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          // Alert removed for pure cinematic flow; user is seamlessly routed.
+          account = (await linkWithCredential(user, credential)).user;
         } else {
-          const created = await createUserWithEmailAndPassword(auth, email.trim(), password);
-          await sendEmailVerification(created.user);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          account = (await createUserWithEmailAndPassword(auth, email.trim(), password)).user;
         }
-        router.replace('/');
+        await sendEmailVerification(account);
+        setVerificationEmail(account.email ?? email.trim());
+        setVerificationMessage(t('auth.verificationSent'));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error: any) {
       // Swallowing console.error to prevent Expo LogBox from showing raw bottom toasts.
@@ -102,6 +111,48 @@ export default function AuthScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerificationCheck = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    setIsLoading(true);
+    setVerificationMessage('');
+    try {
+      await reload(currentUser);
+      if (!currentUser.emailVerified) {
+        setVerificationMessage(t('auth.verificationNotComplete'));
+        return;
+      }
+      await currentUser.getIdToken(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace('/');
+    } catch (error: any) {
+      setVerificationMessage(getErrorMessage(error.code));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerificationResend = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    setIsLoading(true);
+    try {
+      await sendEmailVerification(currentUser);
+      setVerificationMessage(t('auth.verificationSent'));
+    } catch (error: any) {
+      setVerificationMessage(getErrorMessage(error.code));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerificationLogout = async () => {
+    await logout();
+    setVerificationEmail('');
+    setVerificationMessage('');
+    setIsLoginMode(true);
   };
 
   const handlePasswordReset = async () => {
@@ -150,10 +201,54 @@ export default function AuthScreen() {
           <Text style={styles.title}>{t('auth.title')}</Text>
           <View style={styles.glowUnderline} />
           <Text style={styles.subtitle}>
-            {isLoginMode ? t('auth.subtitleLogin') : t('auth.subtitleSignup')}
+            {verificationEmail
+              ? t('auth.verificationSubtitle')
+              : isLoginMode
+                ? t('auth.subtitleLogin')
+                : t('auth.subtitleSignup')}
           </Text>
         </View>
 
+        {verificationEmail ? (
+          <View style={styles.formContainer}>
+            <View style={styles.verificationIcon}>
+              <Ionicons name="mail-unread-outline" size={42} color="#c084fc" />
+            </View>
+            <Text style={styles.verificationEmail}>{verificationEmail}</Text>
+            {verificationMessage ? (
+              <Text style={styles.verificationMessage}>{verificationMessage}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleVerificationCheck}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#6c2e9c', '#c084fc']}
+                style={styles.buttonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>{t('auth.iVerified')}</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.switchModeButton}
+              onPress={handleVerificationResend}
+              disabled={isLoading}
+            >
+              <Text style={styles.switchModeText}>{t('auth.resendVerification')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.resetButton} onPress={handleVerificationLogout}>
+              <Text style={styles.resetText}>{t('auth.useAnotherAccount')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
         <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
@@ -220,6 +315,7 @@ export default function AuthScreen() {
             </TouchableOpacity>
           )}
         </View>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -288,6 +384,24 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
+  },
+  verificationIcon: {
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  verificationEmail: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  verificationMessage: {
+    color: 'rgba(255,255,255,.7)',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 18,
   },
   input: {
     backgroundColor: 'rgba(20, 10, 30, 0.6)',

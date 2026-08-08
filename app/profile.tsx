@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Href, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Linking, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAds } from "../context/AdsContext";
 import { useAuth } from "../context/AuthContext";
 import { useCredits } from "../hooks/useCredits";
 import { deleteAccountAndData, legalUrls } from "../utils/api";
@@ -12,7 +11,6 @@ import { deleteAccountAndData, legalUrls } from "../utils/api";
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { credits } = useCredits();
-  const { showPrivacyOptions } = useAds();
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -69,6 +67,7 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Ionicons name="person-circle" size={88} color="#e8dcf8" />
         <Text style={styles.title}>Rüya Gözcüsü</Text>
+        <Text style={styles.versionBadge}>OMEN 2.0 · REKLAMSIZ</Text>
         <Text style={styles.email}>{user?.email}</Text>
 
         <View style={styles.statsCard}>
@@ -78,7 +77,6 @@ export default function ProfileScreen() {
 
         <MenuButton icon="book-outline" label="Rüya Geçmişim" onPress={() => router.push("/history" as Href)} />
         <MenuButton icon="shield-checkmark-outline" label="Gizlilik Politikası" onPress={() => Linking.openURL(legalUrls.privacy)} />
-        <MenuButton icon="options-outline" label="Reklam Gizlilik Seçenekleri" onPress={() => showPrivacyOptions().catch(() => Alert.alert("Bilgi", "Bu bölgede ek reklam gizlilik seçeneği gerekmiyor."))} />
         <MenuButton icon="log-out-outline" label="Çıkış Yap" onPress={handleLogout} />
 
         <TouchableOpacity style={styles.deleteButton} onPress={confirmDeletion} disabled={isDeleting}>
@@ -110,6 +108,7 @@ const styles = StyleSheet.create({
   backButton: { position: "absolute", top: 42, left: 22, zIndex: 10, width: 42, height: 42, justifyContent: "center", alignItems: "center", borderRadius: 21, backgroundColor: "rgba(26,11,46,.75)", borderWidth: 1, borderColor: "rgba(192,132,252,.3)" },
   content: { alignItems: "center", paddingHorizontal: 28, paddingTop: 105, paddingBottom: 50 },
   title: { fontSize: 29, fontFamily: "serif", color: "#fff", letterSpacing: 3, marginTop: 6 },
+  versionBadge: { color: "#c084fc", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginTop: 10 },
   email: { fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 8, marginBottom: 24 },
   statsCard: { width: "100%", backgroundColor: "rgba(20,10,30,.75)", borderWidth: 1, borderColor: "rgba(192,132,252,.35)", borderRadius: 18, paddingVertical: 18, alignItems: "center", marginBottom: 22 },
   statsLabel: { color: "rgba(255,255,255,.5)", fontSize: 11, letterSpacing: 3 },

@@ -1,29 +1,27 @@
-# 🔮 Omen — AI Destekli Rüya Günlüğü
+# 🔮 Omen 2.0 — Reklamsız AI Rüya Günlüğü
 
-Omen, kullanıcıların rüyalarını kaydetmesine, yapay zekâ destekli bir kişisel farkındalık yorumu almasına ve rüyadan esinlenen güvenli bir görsel oluşturmasına yardımcı olan Android uygulamasıdır.
+Omen, kullanıcıların rüyalarını kaydetmesine, yapay zekâ destekli kişisel farkındalık yorumu almasına ve rüyadan esinlenen güvenli bir görsel oluşturmasına yardımcı olan Android uygulamasıdır.
 
 > Omen çıktıları eğlence ve kişisel farkındalık içindir. Tıbbi tanı, terapi veya kesin gelecek tahmini sunmaz.
 
-## Özellikler
+## Omen 2.0 yenilikleri
 
-- Firebase anonim kullanım ve e-posta hesabı
-- Gemini ile şema doğrulamalı ve güvenlik filtreli rüya analizi
-- Promptu açık URL'de göstermeyen görsel proxy
-- Rüya geçmişini görüntüleme ve tek tek silme
-- Hesap ve tüm verileri uygulama içinden silme
-- AI çıktısını uygulama içinden bildirme
-- AdMob ödüllü reklam, UMP rıza akışı ve imzalı SSV ödülü
-- Sunucu taraflı kredi, günlük ödül ve hız sınırı
-- Türkçe Android deneyimi
+- Reklam ve reklam SDK’sı içermeyen deneyim
+- Bütünsel, duygu veya sembol odaklı analiz seçimi
+- Sembol haritası ve bağlama göre olası anlamlar
+- Kişisel düşünme sorusu ve uygulanabilir küçük adım
+- Önceki rüyayla tekrar eden örüntü karşılaştırması
+- Anonim hesapta 1 başlangıç kredisi
+- Doğrulanmış hesapta en fazla 2 kredi ve günlük 1 kredi yenilemesi
+- Zorunlu e-posta doğrulaması ve sunucu taraflı kredi kontrolü
 
 ## Mimari
 
-- Mobil: React Native, Expo Router, TypeScript
+- Mobil: React Native, Expo Router ve TypeScript
 - Kimlik/veri: Firebase Authentication ve Cloud Firestore
 - API: Cloudflare Worker
 - AI: Google Gemini
 - Görsel: Worker üzerinden güvenli Pollinations proxy
-- Reklam: Google AdMob Rewarded Ads + UMP + SSV
 
 Mobil istemci Gemini anahtarına veya Firebase yönetici yetkisine sahip değildir. Worker Firebase ID tokenını doğrular, kredi işlemlerini optimistic concurrency ile yapar ve AI hatasında krediyi iade eder.
 
@@ -47,11 +45,7 @@ pnpm run dev
 Kalite kontrolleri:
 
 ```bash
-npm run typecheck
-npm run lint
-cd cloudflare-worker
-pnpm run typecheck
-pnpm run test
+npm run check
 ```
 
-Yayın öncesi zorunlu dış servis adımları için [PLAY_RELEASE_CHECKLIST.md](PLAY_RELEASE_CHECKLIST.md) dosyasını kullanın.
+Yayın öncesi dış servis adımları için [PLAY_RELEASE_CHECKLIST.md](PLAY_RELEASE_CHECKLIST.md) dosyasını kullanın.

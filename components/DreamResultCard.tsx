@@ -1,7 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Dimensions, Image, ActivityIndicator, Animated, TouchableOpacity } from "react-native";
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+import { View, Text, StyleSheet, Image, ActivityIndicator, Animated, TouchableOpacity } from "react-native";
 
 interface DreamResultCardProps {
   result: {
@@ -9,6 +7,10 @@ interface DreamResultCardProps {
     primaryEmotion: string;
     moodScore: number;
     archetypes: string[];
+    symbols: { name: string; meaning: string }[];
+    reflectionQuestion: string;
+    actionStep: string;
+    recurringPattern: string;
     gorsel_betimleme: string;
     gorsel_url?: string;
     requestId?: string;
@@ -98,11 +100,42 @@ export function DreamResultCard({ result, onReport }: DreamResultCardProps) {
 
       {/* 3. The Interpretation (Typewriter effect) */}
       <Text style={styles.resultHeader}>RUHUNUN SESİ DİYOR Kİ:</Text>
-      <View style={styles.interpretationScrollContainer}>
-        <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
-          <Text style={styles.resultText}>{typedText}</Text>
-        </ScrollView>
+      <Text selectable style={styles.resultText}>{typedText}</Text>
+
+      {result.symbols.length > 0 && (
+        <View style={styles.insightSection}>
+          <Text style={styles.sectionHeader}>SEMBOL HARİTASI</Text>
+          {result.symbols.map((symbol) => (
+            <View key={`${symbol.name}-${symbol.meaning}`} style={styles.symbolRow}>
+              <View style={styles.symbolBullet} />
+              <View style={styles.symbolContent}>
+                <Text selectable style={styles.symbolName}>{symbol.name}</Text>
+                <Text selectable style={styles.symbolMeaning}>{symbol.meaning}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.insightGrid}>
+        <View style={styles.insightCard}>
+          <Text style={styles.insightIcon}>◌</Text>
+          <Text style={styles.insightLabel}>KENDİNE SOR</Text>
+          <Text selectable style={styles.insightText}>{result.reflectionQuestion}</Text>
+        </View>
+        <View style={styles.insightCard}>
+          <Text style={styles.insightIcon}>↗</Text>
+          <Text style={styles.insightLabel}>BUGÜN DENE</Text>
+          <Text selectable style={styles.insightText}>{result.actionStep}</Text>
+        </View>
       </View>
+
+      {result.recurringPattern && (
+        <View style={styles.patternCard}>
+          <Text style={styles.patternLabel}>ÖRÜNTÜ İZİ</Text>
+          <Text selectable style={styles.patternText}>{result.recurringPattern}</Text>
+        </View>
+      )}
 
       <View style={styles.divider} />
 
@@ -224,10 +257,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     letterSpacing: 1.5,
   },
-  interpretationScrollContainer: {
-    maxHeight: SCREEN_HEIGHT * 0.2,
-    marginBottom: 10,
-  },
   resultText: {
     color: "#fff",
     fontSize: 17,
@@ -237,6 +266,21 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  insightSection: { paddingTop: 22, gap: 12 },
+  sectionHeader: { color: "rgba(232,220,248,.7)", fontSize: 12, fontWeight: "900", letterSpacing: 1.4 },
+  symbolRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  symbolBullet: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#c084fc", marginTop: 7 },
+  symbolContent: { flex: 1 },
+  symbolName: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  symbolMeaning: { color: "rgba(232,220,248,.62)", fontSize: 13, lineHeight: 19, paddingTop: 2 },
+  insightGrid: { gap: 10, paddingTop: 20 },
+  insightCard: { backgroundColor: "rgba(192,132,252,.08)", borderWidth: 1, borderColor: "rgba(192,132,252,.22)", borderRadius: 16, padding: 16 },
+  insightIcon: { color: "#c084fc", fontSize: 21, fontWeight: "900" },
+  insightLabel: { color: "rgba(232,220,248,.48)", fontSize: 10, fontWeight: "900", letterSpacing: 1.4, paddingTop: 6 },
+  insightText: { color: "#f7f1ff", fontSize: 14, lineHeight: 21, paddingTop: 6 },
+  patternCard: { marginTop: 10, borderLeftWidth: 2, borderLeftColor: "#03dac6", paddingLeft: 13, paddingVertical: 5 },
+  patternLabel: { color: "#03dac6", fontSize: 10, fontWeight: "900", letterSpacing: 1.3 },
+  patternText: { color: "rgba(232,220,248,.72)", fontSize: 13, lineHeight: 20, paddingTop: 5 },
   aiArtHeader: {
     color: "rgba(232, 220, 248, 0.7)",
     fontSize: 13,

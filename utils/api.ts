@@ -8,9 +8,22 @@ export interface DreamAnalysis {
   primaryEmotion: string;
   moodScore: number;
   archetypes: string[];
+  symbols: { name: string; meaning: string }[];
+  reflectionQuestion: string;
+  actionStep: string;
+  recurringPattern: string;
   gorsel_betimleme: string;
   gorsel_url?: string;
   requestId: string;
+}
+
+export type AnalysisFocus = "general" | "emotions" | "symbols";
+
+export interface CreditStatus {
+  credits: number;
+  nextRefreshAt: string;
+  dailyRefill: number;
+  maxCredits: number;
 }
 
 export class ApiError extends Error {
@@ -57,16 +70,14 @@ export const analyzeDreamApi = (
   user: User,
   dream: string,
   previousDream: string,
+  focus: AnalysisFocus,
 ) => apiRequest<DreamAnalysis>(user, "/analyze", {
-  body: { dream, previousDream },
+  body: { dream, previousDream, focus },
   timeoutMs: 35_000,
 });
 
 export const claimDailyCredit = (user: User) =>
-  apiRequest(user, "/credits/daily");
-
-export const claimAdReward = (user: User) =>
-  apiRequest(user, "/credits/reward");
+  apiRequest<CreditStatus>(user, "/credits/daily");
 
 export const reportAiContent = (user: User, requestId: string, reason: string) =>
   apiRequest(user, "/report", { body: { requestId, reason } });

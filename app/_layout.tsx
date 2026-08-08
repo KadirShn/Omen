@@ -2,7 +2,6 @@ import { Stack } from "expo-router";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../utils/i18n";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { AdsProvider } from "../context/AdsContext";
 
 function RootLayoutNav() {
   const { isAuthReady } = useAuth();
@@ -28,11 +27,9 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AdsProvider>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
-    </AdsProvider>
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }
 

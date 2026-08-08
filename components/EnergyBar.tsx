@@ -1,55 +1,59 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, Text, View } from "react-native";
 
 interface EnergyBarProps {
   credits: number | null;
-  currentAdProgress: number;
-  requiredAds: number;
   isDeveloper: boolean;
+  nextRefreshAt: string | null;
+  isAnonymous: boolean;
 }
 
-export function EnergyBar({ credits, currentAdProgress, requiredAds, isDeveloper }: EnergyBarProps) {
-  const fillAnim = useRef(new Animated.Value(0)).current;
-  const progress = isDeveloper
-    ? 100
-    : Math.min(100, requiredAds > 0 ? (currentAdProgress / requiredAds) * 100 : 0);
-
-  useEffect(() => {
-    Animated.spring(fillAnim, {
-      toValue: progress,
-      useNativeDriver: false,
-      bounciness: 8,
-    }).start();
-  }, [fillAnim, progress]);
-
+export function EnergyBar({ credits, isDeveloper, nextRefreshAt, isAnonymous }: EnergyBarProps) {
   if (credits === null) return null;
-  const width = fillAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+
+  const refreshLabel = nextRefreshAt
+    ? new Date(nextRefreshAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    : "00:00";
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.energyLabel}>MİSTİK ENERJİ</Text>
+        <View style={styles.titleRow}>
+          <Ionicons name="sparkles" size={16} color="#c084fc" />
+          <Text style={styles.energyLabel}>ANALİZ KREDİSİ</Text>
+        </View>
         <Text style={styles.creditsText}>
-          {isDeveloper ? "∞ Sınırsız" : `${credits} Kehanet`}
+          {isDeveloper ? "∞" : `${credits} / ${isAnonymous ? 1 : 2}`}
         </Text>
       </View>
-      <View style={styles.barBackground}>
-        <Animated.View style={[styles.barFill, { width }, isDeveloper && styles.developerFill]} />
-      </View>
-      {!isDeveloper && credits === 0 && (
-        <Text style={styles.progressText}>Ödül ilerlemesi: {currentAdProgress}/{requiredAds}</Text>
+
+      {!isDeveloper && (
+        <View style={styles.creditRow}>
+          {Array.from({ length: isAnonymous ? 1 : 2 }, (_, index) => (
+            <View key={index} style={[styles.creditDot, index < credits && styles.creditDotActive]} />
+          ))}
+        </View>
       )}
+
+      <Text style={styles.helperText}>
+        {isDeveloper
+          ? "Geliştirici hesabı: sınırsız analiz"
+          : isAnonymous
+            ? "Hesabını doğrula; günlük yenilenen kredilere eriş."
+            : `Her gün 1 kredi yenilenir · sonraki yenileme ${refreshLabel}`}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginVertical: 15, paddingHorizontal: 5 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 },
-  energyLabel: { color: "rgba(232,220,248,.7)", fontSize: 12, fontWeight: "bold", letterSpacing: 1.5 },
-  creditsText: { color: "#e8dcf8", fontSize: 16, fontWeight: "900" },
-  barBackground: { height: 14, width: "100%", backgroundColor: "rgba(0,0,0,.4)", borderRadius: 9, borderWidth: 1, borderColor: "rgba(108,46,156,.5)", overflow: "hidden" },
-  barFill: { height: "100%", backgroundColor: "#6c2e9c" },
-  developerFill: { backgroundColor: "#03dac6" },
-  progressText: { color: "rgba(255,255,255,.45)", fontSize: 11, textAlign: "right", marginTop: 5 },
+  container: { marginVertical: 16, padding: 16, borderRadius: 18, backgroundColor: "rgba(26,11,46,.68)", borderWidth: 1, borderColor: "rgba(192,132,252,.28)" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  energyLabel: { color: "rgba(232,220,248,.78)", fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
+  creditsText: { color: "#fff", fontSize: 19, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  creditRow: { flexDirection: "row", gap: 8, paddingTop: 13 },
+  creditDot: { flex: 1, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,.1)" },
+  creditDotActive: { backgroundColor: "#9f67d2" },
+  helperText: { color: "rgba(232,220,248,.55)", fontSize: 11, lineHeight: 16, paddingTop: 10 },
 });

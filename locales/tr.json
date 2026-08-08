@@ -14,6 +14,13 @@
     "resetEmailSent": "Şifre sıfırlama bağlantısı e-posta adresine gönderildi.",
     "missingInfo": "Lütfen tüm alanları doldur.",
     "successSignup": "Hesabın kalıcı hale getirildi ve rüya geçmişin korundu.",
+    "verificationSubtitle": "Devam etmek için e-posta adresini doğrula.",
+    "verificationRequired": "Devam etmek için önce e-posta adresini doğrulamalısın.",
+    "verificationSent": "Doğrulama bağlantısını gönderdik. Gelen kutunu ve spam klasörünü kontrol et.",
+    "verificationNotComplete": "E-posta henüz doğrulanmamış. Bağlantıya tıkladıktan sonra tekrar dene.",
+    "iVerified": "Doğruladım, Devam Et",
+    "resendVerification": "Doğrulama E-postasını Tekrar Gönder",
+    "useAnotherAccount": "Başka Bir Hesap Kullan",
     "errors": {
       "invalid-email": "Geçersiz e-posta formatı.",
       "invalid-credential": "E-posta veya şifre hatalı.",
@@ -27,7 +34,7 @@
     "errors": {
       "emptyDream": "Önce rüyanı anlatmalısın.",
       "noConnection": "Oturum hazırlanamadı. Lütfen tekrar dene.",
-      "outOfEnergy": "Enerjin tükendi. Ödüllü reklam izleyerek enerji toplayabilirsin.",
+      "outOfEnergy": "Analiz kredin tükendi. Doğrulanmış hesaplarda her gün 1 kredi yenilenir.",
       "fallback": "Analiz tamamlanamadı. Lütfen tekrar dene."
     }
   }

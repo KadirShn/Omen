@@ -14,6 +14,13 @@
     "resetEmailSent": "A password reset link was sent to your email.",
     "missingInfo": "Please fill in all fields.",
     "successSignup": "Your account is secured and your dream history is protected.",
+    "verificationSubtitle": "Verify your email address to continue.",
+    "verificationRequired": "You must verify your email address before continuing.",
+    "verificationSent": "We sent a verification link. Check your inbox and spam folder.",
+    "verificationNotComplete": "Your email is not verified yet. Open the link and try again.",
+    "iVerified": "I've Verified, Continue",
+    "resendVerification": "Resend Verification Email",
+    "useAnotherAccount": "Use Another Account",
     "errors": {
       "invalid-email": "Invalid email format.",
       "invalid-credential": "Incorrect email or password.",
@@ -27,7 +34,7 @@
     "errors": {
       "emptyDream": "Tell us your dream first.",
       "noConnection": "Your session could not be prepared.",
-      "outOfEnergy": "You are out of energy. Watch a rewarded ad to earn more.",
+      "outOfEnergy": "You are out of analysis credits. Verified accounts receive one daily refill.",
       "fallback": "The analysis could not be completed. Please try again."
     }
   }

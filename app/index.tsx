@@ -3,7 +3,7 @@ import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { addDoc, collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,22 +23,23 @@ import { EnergyBar } from "../components/EnergyBar";
 import { MysticLoader } from "../components/MysticLoader";
 import { useAuth } from "../context/AuthContext";
 import { useCredits } from "../hooks/useCredits";
-import { analyzeDreamApi, ApiError, DreamAnalysis, reportAiContent } from "../utils/api";
+import { AnalysisFocus, analyzeDreamApi, ApiError, DreamAnalysis, reportAiContent } from "../utils/api";
 import { db } from "../utils/firebaseConfig";
 
 export default function IndexScreen() {
-  const { user, isAnonymous } = useAuth();
+  const {
+    user,
+    loading: isAuthLoading,
+    authError,
+    isAnonymous,
+    retryAnonymousSignIn,
+  } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
   const {
     credits,
-    currentAdProgress,
-    requiredAds,
     isDeveloper,
-    showAdToEarnCredit,
-    isAdLoaded,
-    isWatchingAd,
-    adMessage,
+    nextRefreshAt,
   } = useCredits();
 
   const [dream, setDream] = useState("");
@@ -46,6 +47,13 @@ export default function IndexScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isCooldown, setIsCooldown] = useState(false);
+  const [focus, setFocus] = useState<AnalysisFocus>("general");
+
+  useEffect(() => {
+    if (user && !user.isAnonymous && !user.emailVerified) {
+      router.replace("/auth");
+    }
+  }, [router, user]);
 
   const getPreviousDream = async (uid: string) => {
     try {
@@ -72,6 +80,7 @@ export default function IndexScreen() {
       TIMEOUT: "Yanıt zaman aşımına uğradı. Kredin iade edildi; tekrar deneyebilirsin.",
       INVALID_DREAM: "Rüyan 10–3000 karakter arasında olmalı.",
       UNAUTHORIZED: "Oturum doğrulanamadı. Uygulamayı yeniden açıp tekrar dene.",
+      EMAIL_NOT_VERIFIED: t("auth.verificationRequired"),
       NETWORK_ERROR: "Bağlantı kurulamadı. İnternetini kontrol et.",
     };
     return messages[error.code] ?? t("index.errors.fallback");
@@ -113,7 +122,7 @@ export default function IndexScreen() {
 
     try {
       const previousDream = await getPreviousDream(user.uid);
-      const analysis = await analyzeDreamApi(user, normalizedDream, previousDream);
+      const analysis = await analyzeDreamApi(user, normalizedDream, previousDream, focus);
       setResult(analysis);
 
       try {
@@ -126,6 +135,10 @@ export default function IndexScreen() {
             primaryEmotion: analysis.primaryEmotion,
             moodScore: analysis.moodScore,
             archetypes: analysis.archetypes,
+            symbols: analysis.symbols,
+            reflectionQuestion: analysis.reflectionQuestion,
+            actionStep: analysis.actionStep,
+            recurringPattern: analysis.recurringPattern,
           },
           imageUrl: analysis.gorsel_url ?? null,
           requestId: analysis.requestId,
@@ -166,7 +179,7 @@ export default function IndexScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
-      <MysticLoader visible={isLoading || isWatchingAd} />
+      <MysticLoader visible={isLoading} />
       <StatusBar barStyle="light-content" />
 
       <TouchableOpacity
@@ -180,8 +193,11 @@ export default function IndexScreen() {
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-        <Text style={styles.headerTitle}>🔮 Omen</Text>
-        <Text style={styles.subtitle}>Bilinçaltının derinliklerine yolculuk…</Text>
+        <View style={styles.brandRow}>
+          <Text style={styles.headerTitle}>🔮 Omen</Text>
+          <Text style={styles.versionBadge}>2.0</Text>
+        </View>
+        <Text style={styles.subtitle}>Daha derin, reklamsız rüya farkındalığı</Text>
 
         <View style={styles.noticeCard}>
           <Ionicons name="information-circle-outline" size={18} color="#c084fc" />
@@ -207,27 +223,62 @@ export default function IndexScreen() {
           <Text style={styles.counter}>{dream.length}/3000</Text>
         </View>
 
-        {errorMsg || adMessage ? (
+        <Text style={styles.focusTitle}>ANALİZ ODAĞI</Text>
+        <View style={styles.focusRow}>
+          {([
+            ["general", "Bütünsel", "sparkles-outline"],
+            ["emotions", "Duygular", "heart-outline"],
+            ["symbols", "Semboller", "shapes-outline"],
+          ] as const).map(([value, label, icon]) => (
+            <TouchableOpacity
+              key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: focus === value }}
+              style={[styles.focusChip, focus === value && styles.focusChipActive]}
+              onPress={() => {
+                setFocus(value);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons name={icon} size={16} color={focus === value ? "#120a1f" : "#c084fc"} />
+              <Text style={[styles.focusChipText, focus === value && styles.focusChipTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {errorMsg || authError ? (
           <View style={styles.messageContainer}>
             <Ionicons name="alert-circle" size={16} color="#ff7096" />
-            <Text style={styles.messageText}>{errorMsg || adMessage}</Text>
+            <Text style={styles.messageText}>{errorMsg || authError}</Text>
           </View>
         ) : null}
 
         <TouchableOpacity
           accessibilityRole="button"
-          style={[styles.button, isLoading && styles.buttonDisabled]}
-          onPress={analyzeDream}
-          disabled={isLoading}
+          accessibilityState={{ disabled: isLoading || isAuthLoading }}
+          style={[styles.button, (isLoading || isAuthLoading) && styles.buttonDisabled]}
+          onPress={user ? analyzeDream : retryAnonymousSignIn}
+          disabled={isLoading || isAuthLoading}
         >
-          {isLoading ? <ActivityIndicator color="#120a1f" /> : <Text style={styles.buttonText}>Kehaneti Al ✨</Text>}
+          {isLoading || isAuthLoading ? (
+            <View style={styles.buttonLoadingContent}>
+              <ActivityIndicator color="#120a1f" />
+              <Text style={styles.buttonText}>
+                {isAuthLoading ? "Oturum hazırlanıyor…" : "Rüyan yorumlanıyor…"}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.buttonText}>
+              {user ? "Kehaneti Al ✨" : "Oturumu Yeniden Dene"}
+            </Text>
+          )}
         </TouchableOpacity>
 
         <EnergyBar
           credits={credits}
-          currentAdProgress={currentAdProgress}
-          requiredAds={requiredAds}
           isDeveloper={isDeveloper}
+          nextRefreshAt={nextRefreshAt}
+          isAnonymous={isAnonymous}
         />
 
         {credits === 0 && !isDeveloper && (
@@ -240,11 +291,10 @@ export default function IndexScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={showAdToEarnCredit} disabled={!isAdLoaded}>
-                <Text style={[styles.rewardLink, !isAdLoaded && styles.linkDisabled]}>
-                  {isAdLoaded ? "Ödüllü Reklam İzle (Enerji Topla)" : "Reklam hazırlanıyor…"}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.refillBox}>
+                <Ionicons name="moon-outline" size={22} color="#c084fc" />
+                <Text style={styles.refillText}>Kredin her gün otomatik yenilenir. Yarın yeni bir analiz hakkın hazır olacak.</Text>
+              </View>
             )}
           </View>
         )}
@@ -261,22 +311,31 @@ const styles = StyleSheet.create({
   profileButton: { position: "absolute", top: 48, right: 24, zIndex: 10 },
   notificationDot: { position: "absolute", top: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: "#ff0055", borderWidth: 2, borderColor: "#120a1f" },
   headerTitle: { fontSize: 36, fontWeight: "900", color: "#e8dcf8", textAlign: "center", letterSpacing: 2, textShadowColor: "rgba(108,46,156,.8)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10 },
+  brandRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9 },
+  versionBadge: { color: "#120a1f", backgroundColor: "#c084fc", borderRadius: 9, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
   subtitle: { fontSize: 14, color: "rgba(232,220,248,.65)", textAlign: "center", marginBottom: 20, fontStyle: "italic" },
   noticeCard: { flexDirection: "row", gap: 8, backgroundColor: "rgba(192,132,252,.08)", borderColor: "rgba(192,132,252,.25)", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16 },
   noticeText: { flex: 1, color: "rgba(232,220,248,.75)", fontSize: 12, lineHeight: 17 },
   inputContainer: { backgroundColor: "rgba(0,0,0,.3)", borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: "rgba(108,46,156,.4)" },
   input: { color: "#fff", fontSize: 17, padding: 20, paddingBottom: 32, minHeight: 130, textAlignVertical: "top" },
   counter: { position: "absolute", right: 14, bottom: 10, color: "rgba(255,255,255,.35)", fontSize: 11 },
+  focusTitle: { color: "rgba(232,220,248,.52)", fontSize: 10, fontWeight: "900", letterSpacing: 1.4, marginBottom: 9 },
+  focusRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  focusChip: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 13, borderWidth: 1, borderColor: "rgba(192,132,252,.3)", backgroundColor: "rgba(26,11,46,.6)" },
+  focusChipActive: { backgroundColor: "#c084fc", borderColor: "#c084fc" },
+  focusChipText: { color: "#e8dcf8", fontSize: 12, fontWeight: "700" },
+  focusChipTextActive: { color: "#120a1f" },
   messageContainer: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "rgba(255,64,129,.1)", padding: 12, borderRadius: 9, borderWidth: 1, borderColor: "rgba(255,64,129,.3)", marginBottom: 16 },
   messageText: { color: "#ff8aaa", fontSize: 13, fontWeight: "600", flex: 1 },
   button: { backgroundColor: "#e8dcf8", paddingVertical: 18, borderRadius: 50, alignItems: "center", elevation: 8 },
   buttonDisabled: { opacity: 0.55 },
+  buttonLoadingContent: { flexDirection: "row", alignItems: "center", gap: 10 },
   buttonText: { color: "#120a1f", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
   outOfEnergyContainer: { marginTop: 8, alignItems: "center" },
   guestBox: { backgroundColor: "rgba(108,46,156,.15)", padding: 18, borderRadius: 15, borderWidth: 1, borderColor: "rgba(108,46,156,.5)", alignItems: "center", width: "100%" },
   guestText: { color: "#e8dcf8", fontSize: 13, textAlign: "center", marginBottom: 12, lineHeight: 18 },
   secondaryButton: { backgroundColor: "#6c2e9c", paddingVertical: 12, paddingHorizontal: 25, borderRadius: 25 },
   secondaryButtonText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
-  rewardLink: { color: "#03dac6", textDecorationLine: "underline", fontWeight: "700", padding: 10 },
-  linkDisabled: { opacity: 0.45, textDecorationLine: "none" },
+  refillBox: { width: "100%", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(192,132,252,.08)", borderWidth: 1, borderColor: "rgba(192,132,252,.22)", padding: 14, borderRadius: 14 },
+  refillText: { flex: 1, color: "rgba(232,220,248,.72)", fontSize: 12, lineHeight: 18 },
 });

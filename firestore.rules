@@ -16,7 +16,7 @@ service cloud.firestore {
                     ])
                     && request.resource.data.isDeveloper == false
                     && request.resource.data.credits == (
-                      request.auth.token.firebase.sign_in_provider == 'anonymous' ? 2 : 5
+                      request.auth.token.firebase.sign_in_provider == 'anonymous' ? 1 : 2
                     );
 
       allow update, delete: if false;
@@ -44,9 +44,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /rate_limits/{document=**} {
-      allow read, write: if false;
-    }
-    match /ad_reward_events/{document=**} {
       allow read, write: if false;
     }
   }
